@@ -1,0 +1,73 @@
+"use client";
+
+import Link from "next/link";
+import { useAssets } from "@/lib/assets-context";
+import { formatDate } from "@/lib/utils";
+import { AppShell } from "./app-shell";
+import { DecisionHistoryPanel } from "./decision-history-panel";
+import { Card, CardContent, CardHeader } from "./ui/card";
+
+export function ReviewsPage() {
+  const { stats, getAllDecisionHistory, comparisons, activity } = useAssets();
+  const history = getAllDecisionHistory();
+
+  const approvals = history.filter((h) => h.decision === "APPROVED").length;
+  const rejections = history.filter((h) => h.decision === "REJECTED").length;
+  const changeRequests = history.filter((h) => h.decision === "CHANGES_REQUESTED").length;
+
+  return (
+    <AppShell
+      title="Reviews"
+      description="Curator decision history and review activity — demo/session data."
+    >
+      <div className="space-y-8">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Approvals", value: approvals, color: "text-emerald-600" },
+            { label: "Rejections", value: rejections, color: "text-red-600" },
+            { label: "Change Requests", value: changeRequests, color: "text-orange-600" },
+            { label: "Comparisons", value: comparisons.length, color: "text-indigo-600" },
+          ].map((stat) => (
+            <Card key={stat.label}>
+              <CardContent className="pt-5">
+                <p className="text-sm text-zinc-500">{stat.label}</p>
+                <p className={`mt-1 text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+                <p className="mt-1 text-xs text-zinc-400">From mock + session data</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <DecisionHistoryPanel history={history} limit={10} />
+
+          <Card>
+            <CardHeader>
+              <h3 className="text-sm font-semibold">Recent Reviewer Activity</h3>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {activity.slice(0, 10).map((item) => (
+                  <li key={item.id} className="py-3 first:pt-0">
+                    <Link
+                      href={`/curation/${item.assetId}`}
+                      className="text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400"
+                    >
+                      {item.assetName}
+                    </Link>
+                    <p className="text-sm text-zinc-500">{item.action}</p>
+                    <time className="text-xs text-zinc-400">{formatDate(item.timestamp)}</time>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        <p className="text-xs text-zinc-400">
+          Current session stats: {stats.approved} approved · {stats.rejected} rejected · {stats.needsChanges} need changes
+        </p>
+      </div>
+    </AppShell>
+  );
+}

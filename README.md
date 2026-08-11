@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AssetPilot AI
+
+An experimental AI asset curation and digital asset management workspace.
+
+AssetPilot AI is a portfolio prototype demonstrating how a human curator can organize, evaluate, compare, classify, and prepare AI-generated digital assets for production. It is **not** a production enterprise DAM system — all data is fictional mock content for demonstration purposes.
+
+## Workflow
+
+```
+AI-generated asset → Intake → Organization → Curation → Quality review
+→ Classification → Comparison → Approve / Reject → Version tracking → Production readiness
+```
+
+Human judgment drives approval decisions. The interface emphasizes structured curator workflows rather than automated AI decision-making.
+
+## Tech Stack
+
+- **Next.js 16** (App Router)
+- **React 19**
+- **TypeScript**
+- **Tailwind CSS v4**
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/           # Next.js App Router pages
+components/    # UI and feature components
+components/ui/ # Primitive UI elements
+data/          # Mock seed data
+lib/           # Utilities and React context
+types/         # TypeScript domain types
+public/        # Static assets and thumbnails
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Phase 1 Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Dashboard with workflow summary and activity feed
+- Asset Library with search and filters
+- Asset detail view with metadata, versions, and review actions
+- Session-only approve / reject / request changes
+- Responsive sidebar navigation
 
-## Deploy on Vercel
+## Phase 2 Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Curation Queue with priority, filters, and sorting
+- Curator Review Workspace with structured quality checklist
+- Curator Quality Score (transparent checklist-based calculation)
+- Decision history with timestamps and reasons
+- Side-by-side asset comparison
+- Collections browser with asset counts
+- Reviews dashboard
+- Production readiness checklist (curator-driven)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Demo Data
+
+All assets, collections, quality scores, and curator names are fictional. No real client work is represented.
