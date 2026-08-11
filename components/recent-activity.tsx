@@ -15,21 +15,32 @@ export function RecentActivity() {
           Recent Activity
         </h2>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Curator actions on demo assets
+          AI suggestions and curator actions on demo assets
         </p>
       </CardHeader>
       <CardContent className="divide-y divide-zinc-100 p-0 dark:divide-zinc-800">
         <ul>
-          {activity.slice(0, 8).map((item) => (
+          {activity.slice(0, 10).map((item) => (
             <li key={item.id}>
               <Link
-                href={`/assets/${item.assetId}`}
+                href={`/curation/${item.assetId}`}
                 className="flex items-start justify-between gap-4 px-5 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
               >
                 <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {item.assetName}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      {item.assetName}
+                    </p>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                        item.source === "ai"
+                          ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}
+                    >
+                      {item.source}
+                    </span>
+                  </div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">{item.action}</p>
                 </div>
                 <time

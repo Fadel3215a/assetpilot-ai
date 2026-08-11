@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { DashboardStats } from "@/components/dashboard-stats";
+import { AIAssistanceStats } from "@/components/ai-assistance-stats";
 import { RecentActivity } from "@/components/recent-activity";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -26,6 +27,8 @@ export function DashboardPage() {
     >
       <div className="space-y-8">
         <DashboardStats />
+
+        <AIAssistanceStats />
 
         <Card>
           <CardHeader>

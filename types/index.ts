@@ -1,5 +1,22 @@
 export type {
+  AIAnalysis,
+  AIAssistanceStats,
+  AIComparisonSummary,
+  AIConfidenceLevel,
+  AITagSuggestion,
+  AIProductionSuggestion,
+  AIProductionSuggestionDetail,
+  AIQualityObservation,
+  AISuggestion,
+  AISuggestionType,
+  AssetAISessionState,
+  CuratorFeedbackAction,
+  CuratorFeedbackEntry,
+} from "./ai";
+
+export type {
   ActivityItem,
+  ActivitySource,
   Asset,
   AssetMetadata,
   AssetStatus,

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { useAssets } from "@/lib/assets-context";
+import { generateComparisonSummary } from "@/lib/generate-ai-analysis";
 import { metadataCompleteness } from "@/lib/quality";
 import { comparisonDecisionLabel } from "@/lib/production";
-import { assetTypeLabel, getCurrentVersion } from "@/lib/utils";
+import { assetTypeLabel, findComparisonPartner, getCurrentVersion } from "@/lib/utils";
+import { AIComparisonSummaryPanel } from "@/components/ai-comparison-summary";
 import { AssetThumbnail } from "@/components/asset-thumbnail";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -75,10 +77,25 @@ function ComparisonPanel({
 }
 
 export function ComparisonPage() {
-  const { assets, submitComparison, comparisons } = useAssets();
+  const { assets, collections, submitComparison, comparisons } = useAssets();
   const searchParams = useSearchParams();
-  const [assetAId, setAssetAId] = useState(searchParams.get("a") ?? "asset-002");
-  const [assetBId, setAssetBId] = useState(searchParams.get("b") ?? "asset-010");
+
+  const initialCompareIds = useMemo(() => {
+    const paramA = searchParams.get("a");
+    const paramB = searchParams.get("b");
+    const fallbackA = assets[0]?.id ?? "";
+    const a =
+      paramA && assets.some((asset) => asset.id === paramA) ? paramA : fallbackA;
+    let b =
+      paramB && assets.some((asset) => asset.id === paramB) ? paramB : "";
+    if (!b || b === a) {
+      b = findComparisonPartner(assets, a) ?? assets.find((asset) => asset.id !== a)?.id ?? "";
+    }
+    return { a, b };
+  }, [assets, searchParams]);
+
+  const [assetAId, setAssetAId] = useState(initialCompareIds.a);
+  const [assetBId, setAssetBId] = useState(initialCompareIds.b);
   const [versionAId, setVersionAId] = useState("");
   const [versionBId, setVersionBId] = useState("");
   const [reason, setReason] = useState("");
@@ -94,6 +111,11 @@ export function ComparisonPage() {
   const assetB = assets.find((a) => a.id === assetBId);
   const resolvedVersionAId = versionAId || (assetA ? getCurrentVersion(assetA).id : "");
   const resolvedVersionBId = versionBId || (assetB ? getCurrentVersion(assetB).id : "");
+
+  const comparisonSummary = useMemo(() => {
+    if (!assetA || !assetB) return null;
+    return generateComparisonSummary(assetA, assetB, collections);
+  }, [assetA, assetB, collections]);
 
   function getItemLabel(assetId: string, versionId: string) {
     const asset = assets.find((a) => a.id === assetId);
@@ -176,6 +198,8 @@ export function ComparisonPage() {
           <ComparisonPanel assetId={assetAId} versionId={resolvedVersionAId} label="Option A" />
           <ComparisonPanel assetId={assetBId} versionId={resolvedVersionBId} label="Option B" />
         </div>
+
+        {comparisonSummary && <AIComparisonSummaryPanel summary={comparisonSummary} />}
 
         <Card>
           <CardHeader>

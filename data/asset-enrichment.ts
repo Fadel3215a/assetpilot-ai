@@ -1,8 +1,10 @@
 import type { Asset, AssetStatus, DecisionHistoryEntry, QueuePriority } from "@/types";
+import { collections } from "@/data/collections";
+import { generateAIAnalysis } from "@/lib/generate-ai-analysis";
 import { deriveChecklistFromScore } from "@/lib/quality";
 import { PRODUCTION_CRITERIA, evaluateProductionCriteria } from "@/lib/production";
 
-type RawAsset = Omit<Asset, "priority" | "decisionHistory">;
+type RawAsset = Omit<Asset, "priority" | "decisionHistory" | "aiAnalysis">;
 
 const priorities: Record<string, QueuePriority> = {
   "asset-001": "low",
@@ -87,12 +89,12 @@ export function enrichMockAssets(rawAssets: RawAsset[]): Asset[] {
       return { ...v, curatorChecklist: checklist, curatorScore };
     });
 
-    const enriched: Asset = {
+    const enriched = {
       ...asset,
       versions,
       priority: priorities[asset.id] ?? "medium",
       decisionHistory: seedDecisionHistory({ ...asset, versions }),
-    };
+    } as Asset;
 
     const prod = evaluateProductionCriteria(enriched);
     enriched.productionReadiness = {
@@ -104,6 +106,8 @@ export function enrichMockAssets(rawAssets: RawAsset[]): Asset[] {
       })),
       readyAt: prod.ready ? enriched.updatedAt : undefined,
     };
+
+    enriched.aiAnalysis = generateAIAnalysis(enriched, collections);
 
     return enriched;
   });

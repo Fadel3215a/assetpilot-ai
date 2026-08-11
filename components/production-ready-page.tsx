@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAssets } from "@/lib/assets-context";
 import { evaluateProductionCriteria } from "@/lib/production";
-import { getCurrentVersion } from "@/lib/utils";
+import { findComparisonPartner, getCurrentVersion } from "@/lib/utils";
 import { AppShell } from "./app-shell";
+import { AIReadinessSummary } from "./ai-readiness-summary";
 import { StatusBadge } from "./status-badge";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
@@ -47,6 +48,7 @@ export function ProductionReadyPage() {
           {evaluated.map(({ asset, items, score, ready: isReady }) => {
             const version = getCurrentVersion(asset);
             const isHighlighted = asset.id === highlightId;
+            const comparePartnerId = findComparisonPartner(assets, asset.id);
 
             return (
               <Card
@@ -76,7 +78,8 @@ export function ProductionReadyPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ul className="grid gap-2 sm:grid-cols-2">
+                  <AIReadinessSummary analysis={asset.aiAnalysis} />
+                  <ul className="mt-4 grid gap-2 sm:grid-cols-2">
                     {items.map((item) => (
                       <li key={item.id} className="flex items-center gap-2 text-sm">
                         <span
@@ -97,9 +100,14 @@ export function ProductionReadyPage() {
                   </ul>
                   <div className="mt-3 flex items-center gap-2">
                     <StatusBadge status={asset.status} />
-                    <Link href={`/compare?a=${asset.id}&b=asset-001`} className="text-xs text-indigo-600 hover:underline dark:text-indigo-400">
-                      Compare
-                    </Link>
+                    {comparePartnerId && (
+                      <Link
+                        href={`/compare?a=${asset.id}&b=${comparePartnerId}`}
+                        className="text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        Compare
+                      </Link>
+                    )}
                   </div>
                 </CardContent>
               </Card>

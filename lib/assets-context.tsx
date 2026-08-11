@@ -19,12 +19,15 @@ import { evaluateProductionCriteria, isQueueAsset } from "@/lib/production";
 import { statusFromDecision } from "@/lib/utils";
 import type {
   ActivityItem,
+  AIAssistanceStats,
   Asset,
+  AssetAISessionState,
   AssetStatus,
   ChecklistRating,
   Collection,
   ComparisonDecisionType,
   ComparisonRecord,
+  CuratorFeedbackEntry,
   DecisionHistoryEntry,
   QualityCriterion,
   ReviewDecisionType,
@@ -50,11 +53,21 @@ interface AssetsContextValue {
   collections: Collection[];
   activity: ActivityItem[];
   comparisons: ComparisonRecord[];
+  feedback: CuratorFeedbackEntry[];
   getAsset: (id: string) => Asset | undefined;
   getQueueAssets: () => Asset[];
+  getAISession: (assetId: string) => AssetAISessionState;
+  markAIAssistedReview: (assetId: string) => void;
   updateCuratorChecklist: (assetId: string, criterionId: string, rating: ChecklistRating) => void;
   submitReview: (assetId: string, payload: SubmitReviewPayload) => { ok: boolean; error?: string };
   submitComparison: (payload: SubmitComparisonPayload) => { ok: boolean; error?: string };
+  acceptTagSuggestion: (assetId: string, tagId: string) => void;
+  editTagSuggestion: (assetId: string, tagId: string, newTag: string) => void;
+  dismissTagSuggestion: (assetId: string, tagId: string) => void;
+  acceptCollectionSuggestion: (assetId: string, collectionId: string) => void;
+  dismissObservation: (assetId: string, observationId: string) => void;
+  acceptObservation: (assetId: string, observationId: string) => void;
+  getAssetFeedback: (assetId: string) => CuratorFeedbackEntry[];
   stats: {
     total: number;
     pendingReview: number;
@@ -64,12 +77,19 @@ interface AssetsContextValue {
     rejected: number;
     changeRequests: number;
   };
+  aiStats: AIAssistanceStats;
   getAllDecisionHistory: () => DecisionHistoryEntry[];
 }
 
 const AssetsContext = createContext<AssetsContextValue | null>(null);
 
 const CURATOR = "Alex Chen";
+
+const defaultSession = (): AssetAISessionState => ({
+  dismissedTagIds: [],
+  dismissedObservationIds: [],
+  aiAssistedReview: false,
+});
 
 function actionLabel(action: ReviewAction): string {
   switch (action) {
@@ -90,11 +110,51 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>(mockAssets);
   const [activity, setActivity] = useState<ActivityItem[]>(mockActivity);
   const [comparisons, setComparisons] = useState<ComparisonRecord[]>(mockComparisons);
+  const [feedback, setFeedback] = useState<CuratorFeedbackEntry[]>([]);
+  const [aiSessions, setAiSessions] = useState<Record<string, AssetAISessionState>>({});
+
+  const addActivity = useCallback(
+    (item: Omit<ActivityItem, "id">) => {
+      setActivity((prev) => [
+        { ...item, id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` },
+        ...prev,
+      ]);
+    },
+    [],
+  );
+
+  const addFeedback = useCallback(
+    (entry: Omit<CuratorFeedbackEntry, "id" | "timestamp">) => {
+      const full: CuratorFeedbackEntry = {
+        ...entry,
+        id: `fb-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      };
+      setFeedback((prev) => [full, ...prev]);
+      return full;
+    },
+    [],
+  );
 
   const getAsset = useCallback(
     (id: string) => assets.find((a) => a.id === id),
     [assets],
   );
+
+  const getAISession = useCallback(
+    (assetId: string) => aiSessions[assetId] ?? defaultSession(),
+    [aiSessions],
+  );
+
+  const markAIAssistedReview = useCallback((assetId: string) => {
+    setAiSessions((prev) => ({
+      ...prev,
+      [assetId]: {
+        ...(prev[assetId] ?? defaultSession()),
+        aiAssistedReview: true,
+      },
+    }));
+  }, []);
 
   const getQueueAssets = useCallback(
     () => assets.filter((a) => isQueueAsset(a.status)),
@@ -139,6 +199,232 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       );
     },
     [],
+  );
+
+  const acceptTagSuggestion = useCallback(
+    (assetId: string, tagId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
+      if (!suggestion) return;
+
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.id === assetId && !a.tags.includes(suggestion.tag)
+            ? { ...a, tags: [...a.tags, suggestion.tag] }
+            : a,
+        ),
+      );
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          dismissedTagIds: [...(prev[assetId]?.dismissedTagIds ?? []), tagId],
+        },
+      }));
+
+      addFeedback({
+        assetId,
+        suggestionType: "tag",
+        suggestion: suggestion.tag,
+        curatorAction: "accepted",
+        finalValue: suggestion.tag,
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator accepted tag: "${suggestion.tag}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const editTagSuggestion = useCallback(
+    (assetId: string, tagId: string, newTag: string) => {
+      const trimmed = newTag.trim();
+      if (!trimmed) return;
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
+      if (!suggestion) return;
+
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.id === assetId && !a.tags.includes(trimmed)
+            ? { ...a, tags: [...a.tags, trimmed] }
+            : a,
+        ),
+      );
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          dismissedTagIds: [...(prev[assetId]?.dismissedTagIds ?? []), tagId],
+        },
+      }));
+
+      addFeedback({
+        assetId,
+        suggestionType: "tag",
+        suggestion: suggestion.tag,
+        curatorAction: "edited",
+        finalValue: trimmed,
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator edited tag: "${suggestion.tag}" → "${trimmed}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const dismissTagSuggestion = useCallback(
+    (assetId: string, tagId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
+      if (!suggestion) return;
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          dismissedTagIds: [...(prev[assetId]?.dismissedTagIds ?? []), tagId],
+        },
+      }));
+
+      addFeedback({
+        assetId,
+        suggestionType: "tag",
+        suggestion: suggestion.tag,
+        curatorAction: "dismissed",
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator dismissed tag: "${suggestion.tag}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const acceptCollectionSuggestion = useCallback(
+    (assetId: string, collectionId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      const collection = collections.find((c) => c.id === collectionId);
+      if (!asset || !collection) return;
+
+      setAssets((prev) =>
+        prev.map((a) => (a.id === assetId ? { ...a, collectionId } : a)),
+      );
+
+      addFeedback({
+        assetId,
+        suggestionType: "collection",
+        suggestion: asset.aiAnalysis.suggestedCollectionId,
+        curatorAction: "accepted",
+        finalValue: collectionId,
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator accepted collection: "${collection.name}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const dismissObservation = useCallback(
+    (assetId: string, observationId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const obs = asset.aiAnalysis.observations.find((o) => o.id === observationId);
+      if (!obs) return;
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          dismissedObservationIds: [
+            ...(prev[assetId]?.dismissedObservationIds ?? []),
+            observationId,
+          ],
+        },
+      }));
+
+      addFeedback({
+        assetId,
+        suggestionType: "observation",
+        suggestion: obs.text,
+        curatorAction: "dismissed",
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator dismissed observation: "${obs.text}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const acceptObservation = useCallback(
+    (assetId: string, observationId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const obs = asset.aiAnalysis.observations.find((o) => o.id === observationId);
+      if (!obs) return;
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          dismissedObservationIds: [
+            ...(prev[assetId]?.dismissedObservationIds ?? []),
+            observationId,
+          ],
+        },
+      }));
+
+      addFeedback({
+        assetId,
+        suggestionType: "observation",
+        suggestion: obs.text,
+        curatorAction: "accepted",
+        finalValue: obs.text,
+      });
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Curator accepted observation: "${obs.text}"`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+    },
+    [assets, addActivity, addFeedback],
+  );
+
+  const getAssetFeedback = useCallback(
+    (assetId: string) => feedback.filter((f) => f.assetId === assetId),
+    [feedback],
   );
 
   const submitReview = useCallback(
@@ -223,20 +509,17 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         }),
       );
 
-      setActivity((prev) => [
-        {
-          id: `act-${Date.now()}`,
-          assetId,
-          assetName: asset.name,
-          action: actionLabel(action),
-          timestamp: now,
-        },
-        ...prev,
-      ]);
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: actionLabel(action),
+        timestamp: now,
+        source: "curator",
+      });
 
       return { ok: true };
     },
-    [assets],
+    [assets, addActivity],
   );
 
   const submitComparison = useCallback(
@@ -266,7 +549,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
             if (a.id === preferredId) {
               return { ...a, status: "APPROVED", updatedAt: now };
             }
-            if (a.id === rejectedId && payload.decision !== "KEEP_BOTH") {
+            if (a.id === rejectedId) {
               return { ...a, status: "REJECTED", updatedAt: now };
             }
             return a;
@@ -285,20 +568,17 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         );
       }
 
-      setActivity((prev) => [
-        {
-          id: `act-${Date.now()}`,
-          assetId: payload.itemA.assetId,
-          assetName: payload.itemA.label,
-          action: `Comparison: ${payload.decision.replace(/_/g, " ").toLowerCase()}`,
-          timestamp: now,
-        },
-        ...prev,
-      ]);
+      addActivity({
+        assetId: payload.itemA.assetId,
+        assetName: payload.itemA.label,
+        action: `Curator comparison: ${payload.decision.replace(/_/g, " ").toLowerCase()}`,
+        timestamp: now,
+        source: "curator",
+      });
 
       return { ok: true };
     },
-    [],
+    [addActivity],
   );
 
   const getAllDecisionHistory = useCallback(() => {
@@ -308,6 +588,32 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
   }, [assets]);
+
+  const aiStats = useMemo((): AIAssistanceStats => {
+    const accepted = feedback.filter((f) => f.curatorAction === "accepted").length;
+    const edited = feedback.filter((f) => f.curatorAction === "edited").length;
+    const dismissed = feedback.filter((f) => f.curatorAction === "dismissed").length;
+    const aiAssistedReviews = Object.values(aiSessions).filter((s) => s.aiAssistedReview).length;
+
+    const suggestionsTotal = assets.reduce((sum, a) => {
+      const session = aiSessions[a.id] ?? defaultSession();
+      const activeTags = a.aiAnalysis.suggestedTags.filter(
+        (t) => !session.dismissedTagIds.includes(t.id),
+      );
+      const activeObs = a.aiAnalysis.observations.filter(
+        (o) => !session.dismissedObservationIds.includes(o.id),
+      );
+      return sum + activeTags.length + activeObs.length + 1;
+    }, 0);
+
+    return {
+      suggestionsTotal,
+      accepted,
+      edited,
+      dismissed,
+      aiAssistedReviews,
+    };
+  }, [assets, feedback, aiSessions]);
 
   const stats = useMemo(
     () => ({
@@ -328,24 +634,46 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       collections,
       activity,
       comparisons,
+      feedback,
       getAsset,
       getQueueAssets,
+      getAISession,
+      markAIAssistedReview,
       updateCuratorChecklist,
       submitReview,
       submitComparison,
+      acceptTagSuggestion,
+      editTagSuggestion,
+      dismissTagSuggestion,
+      acceptCollectionSuggestion,
+      dismissObservation,
+      acceptObservation,
+      getAssetFeedback,
       stats,
+      aiStats,
       getAllDecisionHistory,
     }),
     [
       assets,
       activity,
       comparisons,
+      feedback,
       getAsset,
       getQueueAssets,
+      getAISession,
+      markAIAssistedReview,
       updateCuratorChecklist,
       submitReview,
       submitComparison,
+      acceptTagSuggestion,
+      editTagSuggestion,
+      dismissTagSuggestion,
+      acceptCollectionSuggestion,
+      dismissObservation,
+      acceptObservation,
+      getAssetFeedback,
       stats,
+      aiStats,
       getAllDecisionHistory,
     ],
   );

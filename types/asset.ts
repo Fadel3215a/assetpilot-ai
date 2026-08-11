@@ -1,3 +1,5 @@
+import type { AIAnalysis } from "./ai";
+
 export type AssetType = "image" | "video" | "audio" | "3d";
 
 export type AssetStatus =
@@ -135,9 +137,12 @@ export interface Asset {
   versions: AssetVersion[];
   productionReadiness: ProductionReadiness;
   decisionHistory: DecisionHistoryEntry[];
+  aiAnalysis: AIAnalysis;
   createdAt: string;
   updatedAt: string;
 }
+
+export type ActivitySource = "ai" | "curator";
 
 export interface ActivityItem {
   id: string;
@@ -145,4 +150,5 @@ export interface ActivityItem {
   assetName: string;
   action: string;
   timestamp: string;
+  source: ActivitySource;
 }

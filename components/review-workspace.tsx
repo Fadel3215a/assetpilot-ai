@@ -8,12 +8,14 @@ import { useAssets, type ReviewAction } from "@/lib/assets-context";
 import { createDefaultChecklist, isMetadataComplete, metadataCompleteness } from "@/lib/quality";
 import {
   assetTypeLabel,
+  findComparisonPartner,
   formatDate,
   formatFileSize,
   getCurrentVersion,
   statusLabel,
 } from "@/lib/utils";
 import { AssetThumbnail } from "./asset-thumbnail";
+import { AIInsightPanel } from "./ai-insight-panel";
 import { CuratorScoreDisplay } from "./curator-score-display";
 import { DecisionHistoryPanel } from "./decision-history-panel";
 import { QualityChecklist } from "./quality-checklist";
@@ -25,7 +27,7 @@ import type { QualityCriterion } from "@/types";
 
 export function ReviewWorkspace({ assetId }: { assetId: string }) {
   const router = useRouter();
-  const { getAsset, collections, submitReview, updateCuratorChecklist } = useAssets();
+  const { getAsset, collections, submitReview, updateCuratorChecklist, assets } = useAssets();
   const asset = getAsset(assetId);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
 
   const metadataComplete = isMetadataComplete(version.metadata);
   const metaScore = metadataCompleteness(version.metadata);
+  const comparePartnerId = findComparisonPartner(assets, assetId);
 
   return (
     <div className="space-y-6">
@@ -75,9 +78,11 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
           Back to Curation Queue
         </Link>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/compare?a=${assetId}&b=asset-002`}>
-            <Button variant="secondary">Compare Assets</Button>
-          </Link>
+          {comparePartnerId && (
+            <Link href={`/compare?a=${assetId}&b=${comparePartnerId}`}>
+              <Button variant="secondary">Compare Assets</Button>
+            </Link>
+          )}
           <Link href={`/production-ready?asset=${assetId}`}>
             <Button variant="ghost">Production Readiness</Button>
           </Link>
@@ -160,10 +165,17 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
             </CardContent>
           </Card>
 
+          <AIInsightPanel asset={asset} />
+
           <DecisionHistoryPanel history={asset.decisionHistory} />
         </div>
 
         <div className="space-y-6">
+          <div className="rounded-lg border-2 border-zinc-200 bg-zinc-50/50 p-1 dark:border-zinc-700 dark:bg-zinc-900/30">
+            <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Curator Evaluation
+            </p>
+            <div className="space-y-4 p-3">
           <Card>
             <CardContent className="pt-5">
               <CuratorScoreDisplay checklist={checklist} />
@@ -175,6 +187,8 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
               <QualityChecklist checklist={checklist} onRatingChange={handleRatingChange} />
             </CardContent>
           </Card>
+            </div>
+          </div>
 
           <Card>
             <CardHeader>

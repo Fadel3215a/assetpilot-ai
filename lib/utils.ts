@@ -72,3 +72,20 @@ export function statusLabel(status: AssetStatus): string {
 export function countByStatus(assets: Asset[], status: AssetStatus): number {
   return assets.filter((a) => a.status === status).length;
 }
+
+/** Pick a deterministic comparison partner: same collection first, else first different asset. */
+export function findComparisonPartner(
+  assets: Pick<Asset, "id" | "collectionId">[],
+  assetId: string,
+): string | null {
+  const others = assets.filter((a) => a.id !== assetId);
+  if (others.length === 0) return null;
+
+  const source = assets.find((a) => a.id === assetId);
+  if (source) {
+    const sameCollection = others.find((a) => a.collectionId === source.collectionId);
+    if (sameCollection) return sameCollection.id;
+  }
+
+  return others[0]?.id ?? null;
+}

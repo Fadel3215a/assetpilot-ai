@@ -15,7 +15,7 @@ function checklist(completed: string[]) {
   }));
 }
 
-export const rawMockAssets: Omit<import("@/types").Asset, "priority" | "decisionHistory">[] = [
+export const rawMockAssets: Omit<import("@/types").Asset, "priority" | "decisionHistory" | "aiAnalysis">[] = [
   {
     id: "asset-001",
     name: "Nebula Portal Frame v3",
@@ -556,12 +556,13 @@ export const rawMockAssets: Omit<import("@/types").Asset, "priority" | "decision
 ];
 
 export const mockActivity: ActivityItem[] = [
-  { id: "act-001", assetId: "asset-001", assetName: "Nebula Portal Frame v3", action: "Marked production ready", timestamp: "2026-07-18T14:30:00Z" },
-  { id: "act-002", assetId: "asset-002", assetName: "Crystal Spire Environment", action: "Submitted for review", timestamp: "2026-07-20T08:00:00Z" },
-  { id: "act-003", assetId: "asset-005", assetName: "Prism Geode Prop", action: "Changes requested", timestamp: "2026-07-19T15:00:00Z" },
-  { id: "act-004", assetId: "asset-007", assetName: "Rejected Noise Field", action: "Rejected by curator", timestamp: "2026-07-11T10:00:00Z" },
-  { id: "act-005", assetId: "asset-003", assetName: "Orbital Station Loop", action: "Approved for demo reel", timestamp: "2026-07-10T10:00:00Z" },
-  { id: "act-006", assetId: "asset-004", assetName: "Synthwave UI Chime", action: "Marked production ready", timestamp: "2026-07-16T11:00:00Z" },
-  { id: "act-007", assetId: "asset-011", assetName: "Glitch Transition Sting", action: "Changes requested", timestamp: "2026-07-18T16:00:00Z" },
-  { id: "act-008", assetId: "asset-008", assetName: "Horizon Drift Clip", action: "Added to intake queue", timestamp: "2026-07-22T13:00:00Z" },
+  { id: "act-ai-001", assetId: "asset-002", assetName: "Crystal Spire Environment", action: "AI suggested tags: visual, nebula", timestamp: "2026-07-20T07:55:00Z", source: "ai" },
+  { id: "act-001", assetId: "asset-001", assetName: "Nebula Portal Frame v3", action: "Marked production ready", timestamp: "2026-07-18T14:30:00Z", source: "curator" },
+  { id: "act-002", assetId: "asset-002", assetName: "Crystal Spire Environment", action: "Submitted for review", timestamp: "2026-07-20T08:00:00Z", source: "curator" },
+  { id: "act-003", assetId: "asset-005", assetName: "Prism Geode Prop", action: "Changes requested", timestamp: "2026-07-19T15:00:00Z", source: "curator" },
+  { id: "act-004", assetId: "asset-007", assetName: "Rejected Noise Field", action: "Rejected by curator", timestamp: "2026-07-11T10:00:00Z", source: "curator" },
+  { id: "act-005", assetId: "asset-003", assetName: "Orbital Station Loop", action: "Approved for demo reel", timestamp: "2026-07-10T10:00:00Z", source: "curator" },
+  { id: "act-006", assetId: "asset-004", assetName: "Synthwave UI Chime", action: "Marked production ready", timestamp: "2026-07-16T11:00:00Z", source: "curator" },
+  { id: "act-007", assetId: "asset-011", assetName: "Glitch Transition Sting", action: "Changes requested", timestamp: "2026-07-18T16:00:00Z", source: "curator" },
+  { id: "act-008", assetId: "asset-008", assetName: "Horizon Drift Clip", action: "Added to intake queue", timestamp: "2026-07-22T13:00:00Z", source: "curator" },
 ];

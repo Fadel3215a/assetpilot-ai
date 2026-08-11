@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
 import { formatDate } from "@/lib/utils";
 import { AppShell } from "./app-shell";
+import { AIFeedbackHistory } from "./ai-feedback-history";
 import { DecisionHistoryPanel } from "./decision-history-panel";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
 export function ReviewsPage() {
-  const { stats, getAllDecisionHistory, comparisons, activity } = useAssets();
+  const { stats, getAllDecisionHistory, comparisons, activity, feedback } = useAssets();
   const history = getAllDecisionHistory();
 
   const approvals = history.filter((h) => h.decision === "APPROVED").length;
@@ -49,12 +50,17 @@ export function ReviewsPage() {
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {activity.slice(0, 10).map((item) => (
                   <li key={item.id} className="py-3 first:pt-0">
-                    <Link
-                      href={`/curation/${item.assetId}`}
-                      className="text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400"
-                    >
-                      {item.assetName}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/curation/${item.assetId}`}
+                        className="text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400"
+                      >
+                        {item.assetName}
+                      </Link>
+                      <span className={`rounded px-1 py-0.5 text-[10px] uppercase ${item.source === "ai" ? "bg-violet-100 text-violet-700" : "bg-zinc-100 text-zinc-600"}`}>
+                        {item.source}
+                      </span>
+                    </div>
                     <p className="text-sm text-zinc-500">{item.action}</p>
                     <time className="text-xs text-zinc-400">{formatDate(item.timestamp)}</time>
                   </li>
@@ -63,6 +69,8 @@ export function ReviewsPage() {
             </CardContent>
           </Card>
         </div>
+
+        <AIFeedbackHistory feedback={feedback} />
 
         <p className="text-xs text-zinc-400">
           Current session stats: {stats.approved} approved · {stats.rejected} rejected · {stats.needsChanges} need changes
