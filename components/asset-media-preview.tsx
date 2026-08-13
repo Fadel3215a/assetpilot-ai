@@ -1,6 +1,7 @@
 "use client";
 
 import type { Asset, AssetType } from "@/types";
+import { resolvePublicAssetPath } from "@/lib/base-path";
 import { getCurrentVersion } from "@/lib/utils";
 import { AssetTypeIcon, assetTypeIconLabel } from "./asset-type-icon";
 
@@ -41,11 +42,12 @@ function MediaByType({
   priority?: boolean;
 }) {
   const isBlob = src.startsWith("blob:");
+  const resolvedSrc = isBlob ? src : resolvePublicAssetPath(src);
 
   if (type === "video") {
     return (
       <video
-        src={src}
+        src={resolvedSrc}
         controls
         className="h-full w-full object-contain"
         aria-label={alt}
@@ -59,7 +61,7 @@ function MediaByType({
     return (
       <div className="flex h-full min-h-32 flex-col items-center justify-center gap-4 p-6">
         <AssetTypeIcon type="audio" />
-        <audio src={src} controls className="w-full max-w-md" aria-label={alt}>
+        <audio src={resolvedSrc} controls className="w-full max-w-md" aria-label={alt}>
           <track kind="captions" />
         </audio>
       </div>
@@ -98,22 +100,10 @@ function MediaByType({
     );
   }
 
-  if (isBlob || src.startsWith("/")) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={alt}
-        className="h-full w-full object-contain"
-        loading={priority ? "eager" : "lazy"}
-      />
-    );
-  }
-
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       className="h-full w-full object-contain"
       loading={priority ? "eager" : "lazy"}
