@@ -33,26 +33,26 @@ export function CollectionsPage() {
                     className="mb-3 h-1 w-12 rounded-full"
                     style={{ backgroundColor: col.color }}
                   />
-                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{col.name}</h3>
-                  <p className="mt-1 line-clamp-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  <h3 className="font-semibold text-foreground">{col.name}</h3>
+                  <p className="mt-1 line-clamp-2 text-sm text-muted">
                     {col.description}
                   </p>
                   <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <dt className="text-zinc-400">Assets</dt>
-                      <dd className="font-semibold text-zinc-900 dark:text-zinc-100">{colAssets.length}</dd>
+                      <dt className="text-muted">Assets</dt>
+                      <dd className="font-semibold text-foreground">{colAssets.length}</dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-400">Approved</dt>
-                      <dd className="font-semibold text-emerald-600">{approved}</dd>
+                      <dt className="text-muted">Approved</dt>
+                      <dd className="font-semibold text-status-success">{approved}</dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-400">Pending review</dt>
-                      <dd className="font-semibold text-amber-600">{pending}</dd>
+                      <dt className="text-muted">Pending review</dt>
+                      <dd className="font-semibold text-status-warning">{pending}</dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-400">Production ready</dt>
-                      <dd className="font-semibold text-indigo-600">{productionReady}</dd>
+                      <dt className="text-muted">Production ready</dt>
+                      <dd className="font-semibold text-accent">{productionReady}</dd>
                     </div>
                   </dl>
                 </CardContent>

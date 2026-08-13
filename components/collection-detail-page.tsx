@@ -30,7 +30,7 @@ export function CollectionDetailPage({ collectionId }: { collectionId: string })
       <div className="space-y-6">
         <Link
           href="/assets"
-          className="inline-flex text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          className="link-subtle inline-flex font-medium"
         >
           Browse Asset Library →
         </Link>

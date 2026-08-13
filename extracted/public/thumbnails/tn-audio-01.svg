@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="UI Sound demo asset">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2e1065"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+    <rect x="80" y="120" width="240" height="60" rx="4" fill="rgba(0,0,0,0.25)"/>
+  <path d="M90,150 Q110,100 130,150 T170,150 T210,150 T250,150 T290,150" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
+  <text x="16" y="24" fill="rgba(255,255,255,0.5)" font-family="system-ui,sans-serif" font-size="11">UI Sound · Demo</text>
+</svg>

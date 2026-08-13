@@ -53,30 +53,30 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
     <Card>
       <CardHeader>
         <h3 className="text-sm font-semibold">Version Management</h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-muted">
           Create new versions without deleting previous ones. The latest version is marked current.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
         {asset.versions.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No versions recorded.</p>
+          <p className="text-sm text-muted">No versions recorded.</p>
         ) : (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <ul className="divide-y divide-border">
             {[...asset.versions]
               .sort((a, b) => b.versionNumber - a.versionNumber)
               .map((v) => (
                 <li key={v.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      <p className="text-sm font-medium text-foreground">
                         v{v.versionNumber} — {v.label}
                         {v.isCurrent && (
-                          <span className="ml-2 rounded bg-indigo-100 px-1.5 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          <span className="ml-2 rounded-sm bg-accent-muted px-1.5 py-0.5 text-xs text-accent">
                             Current
                           </span>
                         )}
                       </p>
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-1 text-xs text-muted">
                         {formatDate(v.createdAt)} · {formatFileSize(v.metadata.fileSize)} ·{" "}
                         {v.metadata.format}
                       </p>
@@ -90,19 +90,19 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
         {compareHref && (
           <Link
             href={compareHref}
-            className="inline-flex text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            className="link-subtle inline-flex font-medium"
           >
             Compare versions with related asset
           </Link>
         )}
 
-        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <div className="rounded-md border border-border bg-surface p-4">
+          <h4 className="section-label">
             Create new version
           </h4>
           <div className="mt-3 space-y-3">
             <div>
-              <label htmlFor="version-label" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="version-label" className="mb-1 block text-xs font-medium text-muted">
                 Version label
               </label>
               <Input
@@ -113,23 +113,23 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
               />
             </div>
             <div>
-              <label htmlFor="version-file" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="version-file" className="mb-1 block text-xs font-medium text-muted">
                 Optional replacement file (session-only)
               </label>
               <input
                 ref={fileRef}
                 id="version-file"
                 type="file"
-                className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm dark:text-zinc-400 dark:file:bg-zinc-800"
+                className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-surface-elevated file:px-3 file:py-1.5 file:text-sm file:text-foreground"
               />
             </div>
             {error && (
-              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              <p className="text-sm text-status-danger" role="alert">
                 {error}
               </p>
             )}
             {message && (
-              <p className="text-sm text-emerald-600 dark:text-emerald-400" role="status">
+              <p className="text-sm text-status-success" role="status">
                 {message}
               </p>
             )}

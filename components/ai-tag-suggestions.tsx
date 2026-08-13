@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import type { AITagSuggestion } from "@/types";
 
 interface AITagSuggestionsProps {
@@ -19,28 +20,28 @@ export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSu
   const active = suggestions.filter((s) => !dismissedIds.includes(s.id));
 
   if (active.length === 0) {
-    return <p className="text-sm text-zinc-500">No pending tag suggestions.</p>;
+    return <p className="text-sm text-muted">No pending tag suggestions.</p>;
   }
 
   return (
     <ul className="space-y-3">
       {active.map((s) => (
-        <li key={s.id} className="rounded-lg border border-violet-100 bg-violet-50/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+        <li key={s.id} className="panel-ai p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <span className="rounded-md bg-violet-100 px-2 py-0.5 text-sm font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">
+              <span className="rounded-sm bg-status-ai-muted px-2 py-0.5 text-sm font-medium text-status-ai">
                 {s.tag}
               </span>
-              <p className="mt-1 text-xs text-zinc-500">Why? {s.explanation}</p>
+              <p className="mt-1 text-xs text-muted">Why? {s.explanation}</p>
             </div>
           </div>
           {editingId === s.id ? (
             <div className="mt-2 flex gap-2">
-              <input
+              <Input
                 type="text"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="flex-1 rounded border border-zinc-200 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="flex-1"
                 aria-label={`Edit tag ${s.tag}`}
               />
               <Button

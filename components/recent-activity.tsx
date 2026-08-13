@@ -5,6 +5,7 @@ import { useAssets } from "@/lib/assets-context";
 import { formatRelativeTime } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { EmptyState } from "./empty-state";
+import { SourceBadge } from "./ui/source-badge";
 
 export function RecentActivity() {
   const { activity } = useAssets();
@@ -13,10 +14,10 @@ export function RecentActivity() {
   return (
     <Card>
       <CardHeader>
-        <h2 id="recent-activity-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 id="recent-activity-heading" className="section-title">
           Recent Activity
         </h2>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mt-0.5 text-xs text-muted">
           AI suggestions and curator actions — labeled by source
         </p>
       </CardHeader>
@@ -31,32 +32,22 @@ export function RecentActivity() {
             />
           </div>
         ) : (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <ul className="divide-y divide-border">
             {recent.map((item) => (
               <li key={item.id}>
                 <Link
                   href={`/curation/${item.assetId}`}
-                  className="flex items-start justify-between gap-4 px-5 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  className="flex items-start justify-between gap-4 px-5 py-3 transition-colors hover:bg-surface-elevated"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {item.assetName}
-                      </p>
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                          item.source === "ai"
-                            ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
-                            : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                        }`}
-                      >
-                        {item.source === "ai" ? "AI" : "Curator"}
-                      </span>
+                      <p className="text-sm font-medium text-foreground">{item.assetName}</p>
+                      <SourceBadge source={item.source === "ai" ? "ai" : "curator"} />
                     </div>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{item.action}</p>
+                    <p className="text-sm text-muted">{item.action}</p>
                   </div>
                   <time
-                    className="shrink-0 text-xs text-zinc-400 dark:text-zinc-500"
+                    className="shrink-0 text-xs text-muted"
                     dateTime={item.timestamp}
                   >
                     {formatRelativeTime(item.timestamp)}

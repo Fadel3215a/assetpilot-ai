@@ -32,7 +32,7 @@ function ComparisonPanel({
   if (!asset) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-sm text-zinc-500">
+        <CardContent className="py-8 text-center text-sm text-muted">
           Asset not found
         </CardContent>
       </Card>
@@ -45,9 +45,7 @@ function ComparisonPanel({
   return (
     <Card className="overflow-hidden">
       <CardHeader>
-        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-          {label}
-        </p>
+        <p className="section-label">{label}</p>
         <h3 className="text-sm font-semibold">{asset.name}</h3>
       </CardHeader>
       <AssetThumbnail
@@ -57,18 +55,18 @@ function ComparisonPanel({
         className="aspect-video w-full"
       />
       <CardContent className="space-y-2 text-sm">
-        <p className="text-zinc-500">{assetTypeLabel(asset.type)} · v{version.versionNumber}</p>
+        <p className="text-muted">{assetTypeLabel(asset.type)} · v{version.versionNumber}</p>
         <div className="flex items-center gap-2">
           <StatusBadge status={asset.status} />
-          <span className="text-zinc-500">Score: {version.curatorScore ?? version.qualityScore.overall}</span>
+          <span className="text-muted">Score: {version.curatorScore ?? version.qualityScore.overall}</span>
         </div>
-        <p className="text-zinc-500">Metadata: {metaComplete}% complete</p>
+        <p className="text-muted">Metadata: {metaComplete}% complete</p>
         <div className="flex flex-wrap gap-1">
           {asset.tags.map((t) => (
-            <span key={t} className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">{t}</span>
+            <span key={t} className="tag-muted">{t}</span>
           ))}
         </div>
-        <Link href={`/curation/${asset.id}`} className="inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400">
+        <Link href={`/curation/${asset.id}`} className="inline-block text-xs text-accent hover:underline">
           Open review workspace
         </Link>
       </CardContent>
@@ -177,9 +175,9 @@ export function ComparisonPage() {
       <div className="space-y-6">
         {assets.length < 2 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-zinc-500">
+            <CardContent className="py-8 text-center text-sm text-muted">
               At least two assets are needed to compare.{" "}
-              <Link href="/assets" className="text-indigo-600 hover:underline dark:text-indigo-400">
+              <Link href="/assets" className="text-accent hover:underline">
                 Return to Asset Library
               </Link>
             </CardContent>
@@ -188,7 +186,7 @@ export function ComparisonPage() {
           <>
         <div className="flex flex-wrap gap-4">
           <div>
-            <label htmlFor="compare-a" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Asset A</label>
+            <label htmlFor="compare-a" className="mb-1 block text-xs font-medium text-muted">Asset A</label>
             <Select
               id="compare-a"
               value={assetAId}
@@ -215,7 +213,7 @@ export function ComparisonPage() {
             )}
           </div>
           <div>
-            <label htmlFor="compare-b" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Asset B</label>
+            <label htmlFor="compare-b" className="mb-1 block text-xs font-medium text-muted">Asset B</label>
             <Select
               id="compare-b"
               value={assetBId}
@@ -245,10 +243,10 @@ export function ComparisonPage() {
 
         {comparisonSummary && <AIComparisonSummaryPanel summary={comparisonSummary} />}
 
-        <Card className="border-zinc-300 dark:border-zinc-700">
+        <Card className="panel-curator">
           <CardHeader>
             <h3 className="text-sm font-semibold">Curator Comparison Decision</h3>
-            <p className="text-xs text-zinc-500">Human review required — explain your judgment before confirming</p>
+            <p className="text-xs text-muted">Human review required — explain your judgment before confirming</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <textarea
@@ -256,7 +254,7 @@ export function ComparisonPage() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Explain your comparison decision..."
-              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="field-textarea"
               aria-label="Comparison reason"
             />
             <div className="flex flex-wrap gap-2">
@@ -276,12 +274,12 @@ export function ComparisonPage() {
               <h3 className="text-sm font-semibold">Recent Comparisons</h3>
             </CardHeader>
             <CardContent>
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="divide-y divide-border">
                 {comparisons.slice(0, 5).map((c) => (
                   <li key={c.id} className="py-3 first:pt-0">
                     <p className="text-sm font-medium">{comparisonDecisionLabel(c.decision)}</p>
-                    <p className="text-xs text-zinc-500">{c.itemA.label} vs {c.itemB.label}</p>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{c.reason}</p>
+                    <p className="text-xs text-muted">{c.itemA.label} vs {c.itemB.label}</p>
+                    <p className="mt-1 text-sm text-muted">{c.reason}</p>
                   </li>
                 ))}
               </ul>

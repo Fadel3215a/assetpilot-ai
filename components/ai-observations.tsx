@@ -16,21 +16,18 @@ export function AIObservations({ assetId, observations, dismissedIds }: AIObserv
   const active = observations.filter((o) => !dismissedIds.includes(o.id));
 
   if (active.length === 0) {
-    return <p className="text-sm text-zinc-500">No pending observations.</p>;
+    return <p className="text-sm text-muted">No pending observations.</p>;
   }
 
   return (
     <ul className="space-y-2">
       {active.map((obs) => (
-        <li
-          key={obs.id}
-          className="rounded-lg border border-violet-100 bg-violet-50/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/20"
-        >
-          <p className="text-sm text-zinc-800 dark:text-zinc-200">
-            <span className="mr-1 text-amber-500" aria-hidden="true">⚠</span>
+        <li key={obs.id} className="panel-ai p-3">
+          <p className="text-sm text-foreground">
+            <span className="mr-1 text-status-warning" aria-hidden="true">⚠</span>
             {obs.text}
           </p>
-          <p className="mt-1 text-xs text-zinc-500">Why? {obs.explanation}</p>
+          <p className="mt-1 text-xs text-muted">Why? {obs.explanation}</p>
           <div className="mt-2 flex gap-1.5">
             <Button variant="success" className="px-2 py-1 text-xs" onClick={() => acceptObservation(assetId, obs.id)}>
               Accept Observation

@@ -8,7 +8,7 @@ import { AICollectionSuggestion } from "./ai-collection-suggestion";
 import { AIObservations } from "./ai-observations";
 import { AITagSuggestions } from "./ai-tag-suggestions";
 import { AIFeedbackHistory } from "./ai-feedback-history";
-import { Card, CardContent, CardHeader } from "./ui/card";
+import { SourceBadge } from "./ui/source-badge";
 import type { Asset } from "@/types";
 
 interface AIInsightPanelProps {
@@ -28,35 +28,29 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
 
   return (
     <div className="space-y-4">
-      <Card className="border-violet-200 bg-violet-50/30 dark:border-violet-900/50 dark:bg-violet-950/10">
-        <CardHeader className="border-b border-violet-100 dark:border-violet-900/30">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-600 text-xs font-bold text-white">
-              AI
-            </span>
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                AI-Assisted Analysis
-              </h3>
-              <p className="text-xs text-violet-600 dark:text-violet-400">
-                Simulated AI analysis — suggestions only; human review required
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5 pt-5">
+      <div className="panel-ai">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <SourceBadge source="ai" />
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Summary</p>
-            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{analysis.summary}</p>
+            <h3 className="section-title">AI-Assisted Analysis</h3>
+            <p className="text-xs text-accent">
+              Simulated AI analysis — suggestions only; human review required
+            </p>
+          </div>
+        </div>
+        <div className="space-y-5 px-4 py-4">
+          <div>
+            <p className="section-label">Summary</p>
+            <p className="mt-1 text-sm text-foreground">{analysis.summary}</p>
           </div>
 
           {analysis.strengths.length > 0 && (
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Strengths</p>
+              <p className="section-label">Strengths</p>
               <ul className="mt-1 space-y-1">
                 {analysis.strengths.map((s) => (
-                  <li key={s} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    <span className="text-emerald-500" aria-hidden="true">✓</span>
+                  <li key={s} className="flex items-start gap-2 text-sm text-foreground">
+                    <span className="text-status-success" aria-hidden="true">✓</span>
                     {s}
                   </li>
                 ))}
@@ -66,11 +60,11 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
 
           {analysis.potentialIssues.length > 0 && (
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Potential Issues</p>
+              <p className="section-label">Potential Issues</p>
               <ul className="mt-1 space-y-1">
                 {analysis.potentialIssues.map((issue) => (
-                  <li key={issue} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                    <span className="text-amber-500" aria-hidden="true">⚠</span>
+                  <li key={issue} className="flex items-start gap-2 text-sm text-foreground">
+                    <span className="text-status-warning" aria-hidden="true">⚠</span>
                     {issue}
                   </li>
                 ))}
@@ -79,7 +73,7 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
           )}
 
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Suggested Tags</p>
+            <p className="section-label mb-2">Suggested Tags</p>
             <AITagSuggestions
               assetId={asset.id}
               suggestions={analysis.suggestedTags}
@@ -88,7 +82,7 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+            <p className="section-label mb-2">
               Suggested Collection — {collection?.name}
             </p>
             <AICollectionSuggestion
@@ -100,20 +94,20 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
           </div>
 
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Production Suggestion</p>
-            <p className="mt-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            <p className="section-label">Production Suggestion</p>
+            <p className="mt-1 text-sm font-medium text-foreground">
               {productionSuggestionLabel(analysis.productionSuggestion.recommendation)}
             </p>
-            <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-0.5 text-sm text-muted">
               {analysis.productionSuggestion.summary}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted">
               Why? {analysis.productionSuggestion.explanation}
             </p>
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">AI Observations</p>
+            <p className="section-label mb-2">AI Observations</p>
             <AIObservations
               assetId={asset.id}
               observations={analysis.observations}
@@ -122,8 +116,8 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
           </div>
 
           <AIConfidence level={analysis.confidence} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {assetFeedback.length > 0 && (
         <AIFeedbackHistory feedback={assetFeedback} />

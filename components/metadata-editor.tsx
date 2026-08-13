@@ -68,7 +68,7 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">Metadata Editor</h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-muted">
             Curator-managed fields — changes apply to this session.
           </p>
         </div>
@@ -88,13 +88,13 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
             }}
           >
             <div>
-              <label htmlFor="meta-name" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="meta-name" className="mb-1 block text-xs font-medium text-muted">
                 Asset name
               </label>
               <Input id="meta-name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
-              <label htmlFor="meta-description" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="meta-description" className="mb-1 block text-xs font-medium text-muted">
                 Description
               </label>
               <textarea
@@ -102,17 +102,17 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="field-textarea"
               />
             </div>
             <div>
-              <label htmlFor="meta-tags" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="meta-tags" className="mb-1 block text-xs font-medium text-muted">
                 Tags (comma-separated)
               </label>
               <Input id="meta-tags" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="meta-collection" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="meta-collection" className="mb-1 block text-xs font-medium text-muted">
                 Collection
               </label>
               <Select id="meta-collection" value={collectionId} onChange={(e) => setCollectionId(e.target.value)}>
@@ -124,7 +124,7 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
               </Select>
             </div>
             <div>
-              <label htmlFor="meta-usage" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <label htmlFor="meta-usage" className="mb-1 block text-xs font-medium text-muted">
                 Usage notes
               </label>
               <textarea
@@ -132,7 +132,7 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
                 value={usageNotes}
                 onChange={(e) => setUsageNotes(e.target.value)}
                 rows={2}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="field-textarea"
               />
             </div>
             {error && (
@@ -150,7 +150,7 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
         ) : (
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Usage notes</dt>
+              <dt className="meta-label">Usage notes</dt>
               <dd className="mt-1">{asset.usageNotes?.trim() || "—"}</dd>
             </div>
           </dl>

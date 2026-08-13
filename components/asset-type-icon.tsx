@@ -39,7 +39,7 @@ const icons: Record<AssetType, ReactNode> = {
 
 export function AssetTypeIcon({ type }: { type: AssetType }) {
   return (
-    <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+    <span className="text-muted" aria-hidden="true">
       {icons[type]}
     </span>
   );

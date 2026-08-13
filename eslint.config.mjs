@@ -9,9 +9,13 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    "**/.next/**",
     "out/**",
+    "**/out/**",
     "build/**",
     "next-env.d.ts",
+    // Duplicate/extracted workspace — not part of the active app:
+    "extracted/**",
   ]),
 ]);
 

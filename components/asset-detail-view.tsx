@@ -26,6 +26,7 @@ import { DecisionHistoryPanel } from "./decision-history-panel";
 import { StatusBadge } from "./status-badge";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { SourceBadge } from "./ui/source-badge";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
 export function AssetDetailView({ assetId }: { assetId: string }) {
@@ -80,18 +81,16 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={asset.status} />
                 {asset.isAiGenerated && (
-                  <span className="rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                    AI Generated
-                  </span>
+                  <SourceBadge source="ai" />
                 )}
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                <span className="text-sm text-muted">
                   {assetTypeLabel(asset.type)} · v{version.versionNumber}
                 </span>
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h2 className="mt-3 text-xl font-semibold text-foreground">
                 {asset.name}
               </h2>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-2 text-sm text-muted">
                 {version.metadata.description}
               </p>
             </CardContent>
@@ -104,13 +103,13 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
           <Card>
             <CardHeader>
               <h3 className="text-sm font-semibold">Review Score</h3>
-              <p className="text-xs text-zinc-500">Curator evaluation — not AI confidence</p>
+              <p className="text-xs text-muted">Curator evaluation — not AI confidence</p>
             </CardHeader>
             <CardContent>
               {version.curatorScore !== undefined ? (
                 <div>
-                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{version.curatorScore}</p>
-                  <p className="text-xs text-zinc-500">Curator Quality Score / 100</p>
+                  <p className="text-3xl font-bold text-foreground">{version.curatorScore}</p>
+                  <p className="text-xs text-muted">Curator Quality Score / 100</p>
                 </div>
               ) : (
                 <QualityScoreDisplay score={version.qualityScore} />
@@ -142,20 +141,20 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
           <CardContent>
             <dl className="space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-zinc-500 dark:text-zinc-400">Title</dt>
+                <dt className="meta-label">Title</dt>
                 <dd className="text-right font-medium">{version.metadata.title}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-zinc-500 dark:text-zinc-400">Format</dt>
+                <dt className="meta-label">Format</dt>
                 <dd className="font-medium">{version.metadata.format}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-zinc-500 dark:text-zinc-400">File size</dt>
+                <dt className="meta-label">File size</dt>
                 <dd className="font-medium">{formatFileSize(version.metadata.fileSize)}</dd>
               </div>
               {version.metadata.dimensions && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Dimensions</dt>
+                  <dt className="meta-label">Dimensions</dt>
                   <dd className="font-medium">
                     {version.metadata.dimensions.width} × {version.metadata.dimensions.height}
                   </dd>
@@ -163,12 +162,12 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               )}
               {version.metadata.duration !== undefined && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Duration</dt>
+                  <dt className="meta-label">Duration</dt>
                   <dd className="font-medium">{version.metadata.duration}s</dd>
                 </div>
               )}
               <div className="flex justify-between gap-4">
-                <dt className="text-zinc-500 dark:text-zinc-400">Created</dt>
+                <dt className="meta-label">Created</dt>
                 <dd className="font-medium">{formatDate(version.metadata.createdAt)}</dd>
               </div>
             </dl>
@@ -186,19 +185,19 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
           <CardContent className="space-y-4">
             {collection && (
               <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Collection</p>
+                <p className="text-xs text-muted">Collection</p>
                 <Badge color={collection.color} className="mt-1">
                   {collection.name}
                 </Badge>
               </div>
             )}
             <div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Tags</p>
+              <p className="text-xs text-muted">Tags</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {asset.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                    className="tag-muted"
                   >
                     {tag}
                   </span>
@@ -206,7 +205,7 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               </div>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Status</p>
+              <p className="text-xs text-muted">Status</p>
               <p className="mt-1 text-sm font-medium">{statusLabel(asset.status)}</p>
             </div>
           </CardContent>

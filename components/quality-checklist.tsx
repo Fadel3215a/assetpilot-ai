@@ -10,9 +10,9 @@ interface QualityChecklistProps {
 const ratings: ChecklistRating[] = ["PASS", "NEEDS_REVIEW", "FAIL"];
 
 const ratingStyles: Record<ChecklistRating, string> = {
-  PASS: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-  NEEDS_REVIEW: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
-  FAIL: "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
+  PASS: "border-status-success/40 bg-status-success-muted text-status-success",
+  NEEDS_REVIEW: "border-status-warning/40 bg-status-warning-muted text-status-warning",
+  FAIL: "border-status-danger/40 bg-status-danger-muted text-status-danger",
 };
 
 export function QualityChecklist({
@@ -23,10 +23,8 @@ export function QualityChecklist({
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Quality Checklist
-        </h3>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <h3 className="section-title">Quality Checklist</h3>
+        <p className="mt-0.5 text-xs text-muted">
           Curator evaluation criteria — not automated AI scoring
         </p>
       </div>
@@ -34,9 +32,9 @@ export function QualityChecklist({
         {checklist.map((criterion) => (
           <li
             key={criterion.id}
-            className="flex flex-col gap-2 rounded-lg border border-zinc-100 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800"
+            className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
           >
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-sm font-medium text-foreground">
               {criterion.label}
             </span>
             <div className="flex gap-1.5" role="group" aria-label={`Rate ${criterion.label}`}>
@@ -46,10 +44,10 @@ export function QualityChecklist({
                   type="button"
                   disabled={disabled}
                   onClick={() => onRatingChange(criterion.id, rating)}
-                  className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-sm border px-2.5 py-1 text-xs font-medium transition-colors ${
                     criterion.rating === rating
                       ? ratingStyles[rating]
-                      : "border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      : "border-border text-muted hover:bg-surface-elevated hover:text-foreground"
                   }`}
                   aria-pressed={criterion.rating === rating}
                 >

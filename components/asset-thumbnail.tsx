@@ -24,7 +24,7 @@ export function AssetThumbnail({
   const resolvedSrc = isBlob ? src : resolvePublicAssetPath(src);
 
   return (
-    <div className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-800 ${className}`}>
+    <div className={`relative overflow-hidden bg-surface ${className}`}>
       {isBlob ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={resolvedSrc} alt={alt} className="h-full w-full object-cover" loading={priority ? "eager" : "lazy"} />

@@ -69,19 +69,19 @@ export function AssetUpload() {
     <Card>
       <CardHeader>
         <h3 className="text-sm font-semibold">Upload Assets</h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-muted">
           Files are processed locally and stored only for this session. Refreshing the page may
           remove uploaded assets.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div
-          className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900/50"
+          className="rounded-md border border-border bg-surface px-3 py-2 text-xs"
           role="status"
           aria-live="polite"
         >
           Status:{" "}
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium text-foreground">
             {status === "idle" && "Ready to upload"}
             {status === "processing" && "Processing file and extracting metadata…"}
             {status === "ready" && "Upload complete"}
@@ -91,7 +91,7 @@ export function AssetUpload() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <label htmlFor="asset-upload-input" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <label htmlFor="asset-upload-input" className="mb-1 block text-xs font-medium text-muted">
               Select files (image, video, audio, 3D, or other)
             </label>
             <input
@@ -106,7 +106,7 @@ export function AssetUpload() {
             />
           </div>
           <div className="sm:w-48">
-            <label htmlFor="upload-collection" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <label htmlFor="upload-collection" className="mb-1 block text-xs font-medium text-muted">
               Default collection
             </label>
             <Select
@@ -132,7 +132,7 @@ export function AssetUpload() {
           >
             {isProcessing ? "Processing…" : "Choose files"}
           </Button>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-muted">
             Category detected from file type and extension.
           </p>
         </div>

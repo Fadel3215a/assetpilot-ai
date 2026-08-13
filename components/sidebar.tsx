@@ -16,7 +16,7 @@ const navItems = [
 
 function DashboardIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <rect x="3" y="3" width="7" height="9" rx="1" />
       <rect x="14" y="3" width="7" height="5" rx="1" />
       <rect x="14" y="12" width="7" height="9" rx="1" />
@@ -27,7 +27,7 @@ function DashboardIcon() {
 
 function LibraryIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -38,7 +38,7 @@ function LibraryIcon() {
 
 function QueueIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <path d="M4 6h16M4 12h16M4 18h10" />
     </svg>
   );
@@ -46,7 +46,7 @@ function QueueIcon() {
 
 function CollectionsIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
     </svg>
   );
@@ -54,7 +54,7 @@ function CollectionsIcon() {
 
 function ReviewsIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <path d="M9 11l3 3L22 4" />
       <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
     </svg>
@@ -63,7 +63,7 @@ function ReviewsIcon() {
 
 function ReadyIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
     </svg>
   );
@@ -74,7 +74,7 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const nav = (
-    <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1 p-4">
+    <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-3">
       {navItems.map(({ href, label, icon: Icon }) => {
         const active =
           href === "/"
@@ -86,13 +86,19 @@ export function Sidebar() {
             key={href}
             href={href}
             onClick={() => setMobileOpen(false)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            className={`relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 motion-reduce:transition-none ${
               active
-                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                ? "bg-surface-elevated text-foreground"
+                : "text-muted hover:bg-surface-elevated hover:text-foreground"
             }`}
             aria-current={active ? "page" : undefined}
           >
+            {active && (
+              <span
+                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent"
+                aria-hidden="true"
+              />
+            )}
             <Icon />
             {label}
           </Link>
@@ -105,7 +111,7 @@ export function Sidebar() {
     <>
       <button
         type="button"
-        className="fixed left-4 top-4 z-50 rounded-lg border border-zinc-200 bg-white p-2 text-zinc-700 shadow-sm lg:hidden dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        className="fixed left-4 top-4 z-50 rounded-md border border-border bg-surface p-2 text-foreground lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-expanded={mobileOpen}
         aria-controls="sidebar-nav"
@@ -123,7 +129,7 @@ export function Sidebar() {
       {mobileOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-background/80 lg:hidden"
           aria-label="Close navigation overlay"
           onClick={() => setMobileOpen(false)}
         />
@@ -131,24 +137,24 @@ export function Sidebar() {
 
       <aside
         id="sidebar-nav"
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-zinc-200 bg-white transition-transform dark:border-zinc-800 dark:bg-zinc-950 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-background transition-transform duration-200 motion-reduce:transition-none lg:static lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-zinc-200 px-5 dark:border-zinc-800">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+        <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-xs font-bold text-accent-foreground">
             AP
           </div>
           <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">AssetPilot AI</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Curation workspace</p>
+            <p className="text-sm font-semibold text-foreground">AssetPilot AI</p>
+            <p className="text-[11px] text-muted">Curation workspace</p>
           </div>
         </div>
         {nav}
-        <div className="mt-auto space-y-3 border-t border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mt-auto space-y-2 border-t border-border p-3">
           <DemoResetButton />
-          <p className="text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
-            Independent portfolio demo — simulated AI, fictional assets, session-only state.
+          <p className="text-[11px] leading-relaxed text-muted">
+            Portfolio demo — simulated AI, session-only state.
           </p>
         </div>
       </aside>

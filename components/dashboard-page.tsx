@@ -6,6 +6,7 @@ import { DashboardStats } from "@/components/dashboard-stats";
 import { AIAssistanceStats } from "@/components/ai-assistance-stats";
 import { RecentActivity } from "@/components/recent-activity";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 const workflowSteps = [
   { label: "Discover", href: "/assets" },
@@ -24,7 +25,7 @@ export function DashboardPage() {
     >
       <div className="space-y-8">
         <section aria-labelledby="asset-overview-heading">
-          <h2 id="asset-overview-heading" className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <h2 id="asset-overview-heading" className="section-label mb-4">
             Asset Overview
           </h2>
           <DashboardStats />
@@ -37,10 +38,10 @@ export function DashboardPage() {
         <section aria-labelledby="workflow-heading">
           <Card>
             <CardHeader>
-              <h2 id="workflow-heading" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <h2 id="workflow-heading" className="section-title">
                 Curation Workflow
               </h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-0.5 text-xs text-muted">
                 AI assists. The curator evaluates and decides.
               </p>
             </CardHeader>
@@ -50,9 +51,9 @@ export function DashboardPage() {
                   <li key={step.label}>
                     <Link
                       href={step.href}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+                      className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-accent/30 hover:bg-surface-elevated"
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-sm bg-accent-muted text-[10px] font-bold text-accent">
                         {i + 1}
                       </span>
                       {step.label}
@@ -68,25 +69,21 @@ export function DashboardPage() {
           <RecentActivity />
         </section>
 
-        <Card className="border-indigo-100 bg-indigo-50/30 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+        <Card className="border-accent/20 bg-accent-muted/30">
           <CardContent className="pt-5">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Suggested demo path</p>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm font-medium text-foreground">Suggested demo path</p>
+            <p className="mt-1 text-sm text-muted">
               Dashboard → Curation Queue → Review Workspace → Compare Assets → Production Readiness.
               Also try Asset Library upload, metadata editing, and version management.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link
-                href="/curation"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-              >
-                Start with Curation Queue
+              <Link href="/curation">
+                <Button type="button">Start with Curation Queue</Button>
               </Link>
-              <Link
-                href="/assets"
-                className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Browse Asset Library
+              <Link href="/assets">
+                <Button type="button" variant="secondary">
+                  Browse Asset Library
+                </Button>
               </Link>
             </div>
           </CardContent>

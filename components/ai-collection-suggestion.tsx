@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
 import { Button } from "./ui/button";
 import { Select } from "./ui/select";
+import { SourceBadge } from "./ui/source-badge";
 
 interface AICollectionSuggestionProps {
   assetId: string;
@@ -26,14 +27,12 @@ export function AICollectionSuggestion({
   const isAlreadyInSuggested = currentCollectionId === suggestedCollectionId;
 
   return (
-    <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
-      <p className="text-xs font-medium uppercase tracking-wide text-violet-600 dark:text-violet-400">
-        AI Suggestion
-      </p>
-      <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+    <div className="panel-ai p-3">
+      <SourceBadge source="ai" />
+      <p className="mt-2 text-sm font-medium text-foreground">
         {suggested?.name ?? "Suggested collection"}
       </p>
-      <p className="mt-1 text-xs text-zinc-500">Why? {explanation}</p>
+      <p className="mt-1 text-xs text-muted">Why? {explanation}</p>
 
       {changing ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -71,7 +70,7 @@ export function AICollectionSuggestion({
             Change
           </Button>
           {isAlreadyInSuggested && (
-            <span className="self-center text-xs text-emerald-600 dark:text-emerald-400">
+            <span className="self-center text-xs text-status-success">
               Already in this collection
             </span>
           )}

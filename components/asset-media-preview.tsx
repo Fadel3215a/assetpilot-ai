@@ -21,7 +21,7 @@ export function AssetMediaPreview({
   const alt = `Preview of ${asset.name}`;
 
   return (
-    <div className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-800 ${className}`}>
+    <div className={`relative overflow-hidden bg-surface ${className}`}>
       <MediaByType type={asset.type} src={src} alt={alt} priority={priority} />
       <div className="absolute bottom-2 right-2 rounded-md bg-black/50 p-1.5 text-white backdrop-blur-sm">
         <AssetTypeIcon type={asset.type} />
@@ -75,11 +75,11 @@ function MediaByType({
         role="img"
         aria-label={assetTypeIconLabel("3d")}
       >
-        <div className="rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 p-6 dark:border-indigo-700 dark:bg-indigo-950/40">
+        <div className="rounded-md border-2 border-dashed border-border bg-surface-elevated p-6">
           <AssetTypeIcon type="3d" />
         </div>
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">3D Asset</p>
-        <p className="max-w-xs text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm font-medium text-foreground">3D Asset</p>
+        <p className="max-w-xs text-xs text-muted">
           3D preview placeholder — full rendering not available in this prototype.
         </p>
       </div>
@@ -94,8 +94,8 @@ function MediaByType({
         aria-label="Generic file preview"
       >
         <AssetTypeIcon type="other" />
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">File Asset</p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Generic preview — no visual renderer.</p>
+        <p className="text-sm font-medium text-foreground">File Asset</p>
+        <p className="text-xs text-muted">Generic preview — no visual renderer.</p>
       </div>
     );
   }

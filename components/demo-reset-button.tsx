@@ -46,7 +46,7 @@ export function DemoResetButton() {
     <Button
       type="button"
       variant="ghost"
-      className="w-full justify-start px-3 py-2 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+      className="w-full justify-start px-3 py-2 text-xs text-muted hover:text-foreground"
       onClick={() => setConfirming(true)}
     >
       Reset demo session

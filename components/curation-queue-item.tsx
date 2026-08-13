@@ -15,9 +15,9 @@ interface CurationQueueItemProps {
 }
 
 const priorityStyles = {
-  high: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  low: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  high: "border-status-danger/30 bg-status-danger-muted text-status-danger",
+  medium: "border-status-warning/30 bg-status-warning-muted text-status-warning",
+  low: "border-border bg-surface-elevated text-muted",
 };
 
 export function CurationQueueItem({ asset, collection }: CurationQueueItemProps) {
@@ -27,24 +27,24 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
   return (
     <Link
       href={`/curation/${asset.id}`}
-      className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 transition-all hover:border-indigo-200 hover:shadow-md sm:flex-row sm:items-center dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800"
+      className="flex flex-col gap-4 rounded-md border border-border bg-surface p-4 transition-colors hover:border-accent/30 sm:flex-row sm:items-center"
     >
       <AssetThumbnail
         src={version.thumbnailPath}
         alt={`Thumbnail for ${asset.name}`}
         type={asset.type}
-        className="h-24 w-full shrink-0 sm:h-20 sm:w-28"
+        className="h-24 w-full shrink-0 rounded-sm border border-border sm:h-20 sm:w-28"
       />
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{asset.name}</h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <h3 className="font-semibold text-foreground">{asset.name}</h3>
+            <p className="text-xs text-muted">
               {assetTypeLabel(asset.type)} · v{version.versionNumber}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${priorityStyles[asset.priority]}`}>
+            <span className={`rounded-sm border px-2 py-0.5 text-[11px] font-medium ${priorityStyles[asset.priority]}`}>
               {priorityLabel(asset.priority)} priority
             </span>
             <StatusBadge status={asset.status} />
@@ -54,13 +54,13 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
           <QualityScoreDisplay score={version.qualityScore} compact />
           {collection && <Badge color={collection.color}>{collection.name}</Badge>}
           {metadataMissing && (
-            <span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+            <span className="rounded-sm border border-status-warning/30 bg-status-warning-muted px-2 py-0.5 text-[11px] font-medium text-status-warning">
               Missing metadata
             </span>
           )}
         </div>
       </div>
-      <span className="hidden shrink-0 text-sm font-medium text-indigo-600 sm:block dark:text-indigo-400">
+      <span className="hidden shrink-0 text-sm font-medium text-accent sm:block">
         Review →
       </span>
     </Link>

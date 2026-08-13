@@ -105,7 +105,7 @@ export function CurationQueueList() {
         </div>
       </div>
 
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-muted">
         {filtered.length} asset{filtered.length !== 1 ? "s" : ""} awaiting curator review
       </p>
 

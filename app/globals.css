@@ -1,25 +1,124 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --background: #0b0f12;
+  --surface: #161c22;
+  --surface-elevated: #1c242c;
+  --foreground: #f0f4f8;
+  --muted: #8b9aab;
+  --accent: #00f5a0;
+  --accent-muted: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-foreground: #0b0f12;
+  --border: #28333e;
+  --border-subtle: color-mix(in srgb, var(--border) 70%, transparent);
+  --status-success: #34d399;
+  --status-success-muted: color-mix(in srgb, var(--status-success) 12%, transparent);
+  --status-warning: #fbbf24;
+  --status-warning-muted: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  --status-danger: #f87171;
+  --status-danger-muted: color-mix(in srgb, var(--status-danger) 12%, transparent);
+  --status-neutral: #8b9aab;
+  --status-neutral-muted: color-mix(in srgb, var(--status-neutral) 12%, transparent);
+  --status-ai: #00f5a0;
+  --status-ai-muted: color-mix(in srgb, var(--status-ai) 10%, transparent);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-status-success: var(--status-success);
+  --color-status-success-muted: var(--status-success-muted);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-muted: var(--status-warning-muted);
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-muted: var(--status-danger-muted);
+  --color-status-neutral: var(--status-neutral);
+  --color-status-neutral-muted: var(--status-neutral-muted);
+  --color-status-ai: var(--status-ai);
+  --color-status-ai-muted: var(--status-ai-muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #ededed;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-muted;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .meta-label {
+    @apply text-xs text-muted;
+  }
+
+  .meta-value {
+    @apply text-sm font-medium text-foreground;
+  }
+
+  .tag-muted {
+    @apply rounded-sm bg-surface-elevated px-1.5 py-0.5 text-[11px] text-muted;
+  }
+
+  .link-subtle {
+    @apply text-sm text-muted transition-colors hover:text-accent;
+  }
+
+  .panel-ai {
+    @apply rounded-md border border-border bg-surface;
+    border-left: 2px solid var(--status-ai);
+  }
+
+  .panel-curator {
+    @apply rounded-md border border-border bg-surface-elevated;
+    border-left: 2px solid var(--foreground);
+  }
+
+  .panel-attention {
+    @apply rounded-md border border-border bg-surface px-4 py-3 text-sm text-foreground;
+  }
+
+  .field-textarea {
+    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30;
+  }
+
+  .stat-primary {
+    @apply text-3xl font-semibold tracking-tight text-foreground;
+  }
+
+  .stat-secondary {
+    @apply text-2xl font-semibold tracking-tight text-foreground/90;
+  }
 }

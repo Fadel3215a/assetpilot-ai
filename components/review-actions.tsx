@@ -36,22 +36,22 @@ export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h3 className="section-title">
           Curator Review
         </h3>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-xs text-muted">
           Human judgment drives approval decisions. Changes apply to this session only.
         </p>
         <Link
           href={`/curation/${assetId}`}
-          className="mt-2 inline-block text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          className="mt-2 inline-block text-xs font-medium text-accent hover:underline"
         >
           Open full review workspace →
         </Link>
       </div>
 
       <div>
-        <label htmlFor="review-notes" className="mb-1.5 block text-sm text-zinc-600 dark:text-zinc-400">
+        <label htmlFor="review-notes" className="mb-1.5 block text-sm text-muted">
           Curator notes
         </label>
         <textarea
@@ -60,7 +60,7 @@ export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) 
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add curator notes for this decision..."
-          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          className="field-textarea"
         />
       </div>
 
@@ -76,15 +76,15 @@ export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) 
         </Button>
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
+      {error && <p className="text-sm text-status-danger" role="alert">{error}</p>}
 
       {lastAction && (
-        <p className="text-sm text-emerald-600 dark:text-emerald-400" role="status">
+        <p className="text-sm text-status-success" role="status">
           Decision recorded: {lastAction.replace("_", " ").toLowerCase()} (session only)
         </p>
       )}
 
-      <p className="text-xs text-zinc-400 dark:text-zinc-500">
+      <p className="text-xs text-muted">
         Current review state: {currentDecision.replace("_", " ").toLowerCase()}
       </p>
     </div>

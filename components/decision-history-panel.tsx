@@ -18,37 +18,37 @@ export function DecisionHistoryPanel({
   return (
     <Card>
       <CardHeader>
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <h3 className="section-title">{title}</h3>
+        <p className="mt-0.5 text-xs text-muted">
           Curator decisions with timestamps and reasons
         </p>
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No decisions recorded yet.</p>
+          <p className="text-sm text-muted">No decisions recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <ul className="divide-y divide-border">
             {entries.map((entry) => (
               <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-foreground">
                       {entry.decision.replace(/_/g, " ")}
                     </p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <p className="text-xs text-muted">
                       {statusLabel(entry.previousStatus)} → {statusLabel(entry.newStatus)}
                     </p>
                   </div>
-                  <time className="text-xs text-zinc-400 dark:text-zinc-500" dateTime={entry.timestamp}>
+                  <time className="text-xs text-muted" dateTime={entry.timestamp}>
                     {formatDate(entry.timestamp)}
                   </time>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-1 text-xs text-muted">
                   Curator: {entry.reviewer}
                   {entry.curatorScore !== undefined && ` · Score: ${entry.curatorScore}`}
                 </p>
                 {entry.reason && (
-                  <p className="mt-1.5 rounded-md bg-zinc-50 p-2 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                  <p className="mt-1.5 rounded-md bg-surface-elevated p-2 text-sm text-muted">
                     {entry.reason}
                   </p>
                 )}

@@ -18,10 +18,10 @@ export function ExtractedMetadataPanel({ asset }: ExtractedMetadataPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+        <h3 className="section-label">
           Extracted Metadata
         </h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="text-xs text-muted">
           Read from file properties — not AI-generated.
         </p>
       </CardHeader>
@@ -50,7 +50,7 @@ export function ExtractedMetadataPanel({ asset }: ExtractedMetadataPanelProps) {
             )}
           </dl>
         ) : (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-muted">
             No extracted file metadata for this seeded demo asset.
           </p>
         )}
@@ -62,8 +62,8 @@ export function ExtractedMetadataPanel({ asset }: ExtractedMetadataPanelProps) {
 function MetadataRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-zinc-500 dark:text-zinc-400">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
+      <dt className="meta-label">{label}</dt>
+      <dd className="meta-value text-right">{value}</dd>
     </div>
   );
 }

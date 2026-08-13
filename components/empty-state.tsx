@@ -17,9 +17,9 @@ export function EmptyState({
   onAction,
 }: EmptyStateProps) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+    <div className="rounded-md border border-dashed border-border bg-surface px-6 py-12 text-center">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-muted">{description}</p>
       {actionLabel && actionHref && (
         <Link href={actionHref} className="mt-4 inline-block">
           <Button type="button">{actionLabel}</Button>

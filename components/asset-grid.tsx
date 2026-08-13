@@ -55,13 +55,13 @@ export function AssetGrid() {
       <AssetUpload />
 
       {focusLabel && (
-        <p className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
+        <p className="rounded-md border border-accent/20 bg-accent-muted px-3 py-2 text-sm text-foreground">
           {focusLabel}
         </p>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <label className="flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"
             checked={bulkMode}
@@ -69,7 +69,7 @@ export function AssetGrid() {
               setBulkMode(e.target.checked);
               if (!e.target.checked) setSelectedIds([]);
             }}
-            className="rounded border-zinc-300"
+            className="rounded-sm border-border accent-accent"
           />
           Bulk select mode
         </label>

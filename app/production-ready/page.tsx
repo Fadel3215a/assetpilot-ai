@@ -3,7 +3,7 @@ import { ProductionReadyPage } from "@/components/production-ready-page";
 
 export default function ProductionReadyRoute() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-zinc-500">Loading...</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-muted">Loading...</div>}>
       <ProductionReadyPage />
     </Suspense>
   );
