@@ -135,6 +135,30 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run start` | Production server |
 | `npm run lint` | ESLint |
 
+## Deployment (GitHub Pages)
+
+AssetPilot AI is configured for static hosting on GitHub Pages:
+
+**Live URL:** [https://fadel3215a.github.io/assetpilot-ai/](https://fadel3215a.github.io/assetpilot-ai/)
+
+The repository includes a GitHub Actions workflow (`.github/workflows/deploy-pages.yml`) that builds and deploys on pushes to `main`.
+
+### Build for GitHub Pages locally
+
+```bash
+# Linux / macOS / Git Bash
+GITHUB_PAGES=true npm run build
+```
+
+The static site is written to the `out/` directory. No Node.js server is required—GitHub Pages serves these files directly.
+
+### Deployment notes
+
+- This is a **static portfolio/demo deployment**—all app state remains **browser-only**
+- **Uploaded files are not persisted**; refreshing the page may clear session uploads
+- **AI analysis remains simulated/deterministic**—no external AI API is connected
+- Pre-rendered routes cover seeded demo assets and collections; session-uploaded assets work via in-app navigation but may not have a dedicated static HTML file until you rebuild
+
 ## Portfolio / Demo Notes
 
 - Use **Reset demo session** in the sidebar to restore seeded data and clear session changes
