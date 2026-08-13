@@ -15,11 +15,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AssetPilot AI",
+    default: "AssetPilot AI | AI-Assisted Digital Asset Curation",
     template: "%s | AssetPilot AI",
   },
   description:
-    "An experimental AI asset curation and digital asset management workspace.",
+    "An independent portfolio project exploring human-in-the-loop AI-assisted digital asset curation, metadata management, quality control, and production readiness.",
+  applicationName: "AssetPilot AI",
 };
 
 export default function RootLayout({

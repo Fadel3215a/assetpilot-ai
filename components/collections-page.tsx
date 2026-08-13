@@ -12,7 +12,11 @@ export function CollectionsPage() {
   return (
     <AppShell
       title="Collections"
-      description="Fictional project collections organizing demo AI-generated assets."
+      description="Fictional project collections organizing demo assets by campaign and workflow stage."
+      breadcrumbs={[
+        { label: "Dashboard", href: "/" },
+        { label: "Collections" },
+      ]}
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {collections.map((col) => {
@@ -30,7 +34,7 @@ export function CollectionsPage() {
                     style={{ backgroundColor: col.color }}
                   />
                   <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{col.name}</h3>
-                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                  <p className="mt-1 line-clamp-2 text-sm text-zinc-500 dark:text-zinc-400">
                     {col.description}
                   </p>
                   <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -43,11 +47,11 @@ export function CollectionsPage() {
                       <dd className="font-semibold text-emerald-600">{approved}</dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-400">Pending</dt>
+                      <dt className="text-zinc-400">Pending review</dt>
                       <dd className="font-semibold text-amber-600">{pending}</dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-400">Production</dt>
+                      <dt className="text-zinc-400">Production ready</dt>
                       <dd className="font-semibold text-indigo-600">{productionReady}</dd>
                     </div>
                   </dl>

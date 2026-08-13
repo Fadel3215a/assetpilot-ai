@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { DemoResetButton } from "./demo-reset-button";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
@@ -144,9 +145,10 @@ export function Sidebar() {
           </div>
         </div>
         {nav}
-        <div className="mt-auto border-t border-zinc-200 p-4 dark:border-zinc-800">
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            Demo prototype — mock data only
+        <div className="mt-auto space-y-3 border-t border-zinc-200 p-4 dark:border-zinc-800">
+          <DemoResetButton />
+          <p className="text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
+            Independent portfolio demo — simulated AI, fictional assets, session-only state.
           </p>
         </div>
       </aside>

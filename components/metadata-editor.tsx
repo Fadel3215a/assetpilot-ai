@@ -63,7 +63,8 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
   };
 
   return (
-    <Card>
+    <div id="metadata-editor">
+      <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">Metadata Editor</h3>
@@ -155,6 +156,7 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
           </dl>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

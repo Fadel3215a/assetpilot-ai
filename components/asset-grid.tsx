@@ -1,23 +1,36 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAssets } from "@/lib/assets-context";
 import { defaultAssetFilters, filterAssets } from "@/lib/asset-search";
+import { assetHasMetadataIssues } from "@/lib/duplicate-detection";
 import { AssetCard } from "./asset-card";
 import { AssetFilters } from "./asset-filters";
 import { AssetUpload } from "./asset-upload";
 import { BulkActionsBar } from "./bulk-actions-bar";
+import { EmptyState } from "./empty-state";
 
 export function AssetGrid() {
-  const { assets, collections } = useAssets();
+  const { assets, collections, getDuplicateCandidates } = useAssets();
+  const searchParams = useSearchParams();
+  const focus = searchParams.get("focus");
   const [filters, setFilters] = useState(defaultAssetFilters);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkMode, setBulkMode] = useState(false);
 
-  const filtered = useMemo(
-    () => filterAssets(assets, filters, collections),
-    [assets, filters, collections],
-  );
+  const filtered = useMemo(() => {
+    let result = filterAssets(assets, filters, collections);
+
+    if (focus === "duplicates") {
+      result = result.filter((asset) => getDuplicateCandidates(asset.id).length > 0);
+    }
+    if (focus === "metadata") {
+      result = result.filter((asset) => assetHasMetadataIssues(asset, collections));
+    }
+
+    return result;
+  }, [assets, filters, collections, focus, getDuplicateCandidates]);
 
   const collectionMap = useMemo(
     () => new Map(collections.map((c) => [c.id, c])),
@@ -30,9 +43,22 @@ export function AssetGrid() {
     );
   };
 
+  const focusLabel =
+    focus === "duplicates"
+      ? "Showing assets with possible metadata-based duplicates."
+      : focus === "metadata"
+        ? "Showing assets with metadata or tagging issues."
+        : null;
+
   return (
     <div className="space-y-6">
       <AssetUpload />
+
+      {focusLabel && (
+        <p className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
+          {focusLabel}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -65,21 +91,17 @@ export function AssetGrid() {
       />
 
       {assets.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">No assets yet</p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Upload files above or refresh to restore seeded demo assets.
-          </p>
-        </div>
+        <EmptyState
+          title="No assets yet"
+          description="Upload files above or use Reset demo session in the sidebar to restore seeded assets."
+        />
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            No assets match your search or filters
-          </p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Try adjusting search or filter criteria.
-          </p>
-        </div>
+        <EmptyState
+          title="No assets match your search or filters"
+          description="Try adjusting search terms, clearing filters, or removing the dashboard focus link."
+          actionLabel="Clear filters"
+          onAction={() => setFilters(defaultAssetFilters)}
+        />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((asset) => (

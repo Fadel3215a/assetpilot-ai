@@ -7,7 +7,11 @@ export function CurationQueuePage() {
   return (
     <AppShell
       title="Curation Queue"
-      description="Assets awaiting human curator review — prioritized demo queue."
+      description="Assets awaiting curator review — prioritized by workflow status and quality signals."
+      breadcrumbs={[
+        { label: "Dashboard", href: "/" },
+        { label: "Curation Queue" },
+      ]}
     >
       <CurationQueueList />
     </AppShell>

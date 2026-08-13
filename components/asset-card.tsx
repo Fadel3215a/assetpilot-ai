@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { Asset, Collection } from "@/types";
+import { useAssets } from "@/lib/assets-context";
 import { assetTypeLabel, getCurrentVersion } from "@/lib/utils";
 import { AssetThumbnail } from "./asset-thumbnail";
 import { StatusBadge } from "./status-badge";
 import { Badge } from "./ui/badge";
-import { QualityScoreDisplay } from "./quality-score-display";
 
 interface AssetCardProps {
   asset: Asset;
@@ -23,7 +23,15 @@ export function AssetCard({
   selected = false,
   onToggleSelect,
 }: AssetCardProps) {
+  const { getAssetHealth } = useAssets();
   const version = getCurrentVersion(asset);
+  const health = getAssetHealth(asset.id);
+  const healthSummary =
+    health && health.completeCount < health.totalCount
+      ? `${health.completeCount}/${health.totalCount} health criteria met`
+      : health
+        ? "Health complete"
+        : null;
 
   const inner = (
     <>
@@ -35,7 +43,7 @@ export function AssetCard({
       />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-900 group-hover:text-indigo-600 dark:text-zinc-100 dark:group-hover:text-indigo-400">
+          <h3 className="line-clamp-2 text-sm font-semibold text-zinc-900 group-hover:text-indigo-600 dark:text-zinc-100 dark:group-hover:text-indigo-400">
             {asset.name}
           </h3>
           <StatusBadge status={asset.status} />
@@ -45,19 +53,19 @@ export function AssetCard({
           <span>{assetTypeLabel(asset.type)}</span>
           <span aria-hidden="true">·</span>
           <span>v{version.versionNumber}</span>
+          <span aria-hidden="true">·</span>
+          <span>Quality {version.curatorScore ?? version.qualityScore.overall}</span>
           {asset.isSessionUpload && (
             <>
               <span aria-hidden="true">·</span>
-              <span className="text-amber-600 dark:text-amber-400">Session upload</span>
-            </>
-          )}
-          {collection && (
-            <>
-              <span aria-hidden="true">·</span>
-              <Badge color={collection.color}>{collection.name}</Badge>
+              <span className="text-amber-600 dark:text-amber-400">Session</span>
             </>
           )}
         </div>
+
+        {collection && (
+          <Badge color={collection.color}>{collection.name}</Badge>
+        )}
 
         <div className="flex flex-wrap gap-1.5">
           {asset.tags.slice(0, 3).map((tag) => (
@@ -69,11 +77,13 @@ export function AssetCard({
             </span>
           ))}
           {asset.tags.length > 3 && (
-            <span className="text-xs text-zinc-400">+{asset.tags.length - 3}</span>
+            <span className="text-xs text-zinc-400">+{asset.tags.length - 3} tags</span>
           )}
         </div>
 
-        <QualityScoreDisplay score={version.qualityScore} compact />
+        {healthSummary && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{healthSummary}</p>
+        )}
       </div>
     </>
   );

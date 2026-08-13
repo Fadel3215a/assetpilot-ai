@@ -102,11 +102,13 @@ export function countPossibleDuplicates(assets: Asset[], ignoredIds: Set<string>
 }
 
 export function getAssetsWithMetadataIssues(assets: Asset[], collections: Collection[]): number {
-  return assets.filter((asset) => {
-    const v = getCurrentVersion(asset);
-    const hasDescription = v.metadata.description.trim().length > 0;
-    const hasTags = asset.tags.length >= 2;
-    const collection = collections.find((c) => c.id === asset.collectionId);
-    return !hasDescription || !hasTags || !collection;
-  }).length;
+  return assets.filter((asset) => assetHasMetadataIssues(asset, collections)).length;
+}
+
+export function assetHasMetadataIssues(asset: Asset, collections: Collection[]): boolean {
+  const v = getCurrentVersion(asset);
+  const hasDescription = v.metadata.description.trim().length > 0;
+  const hasTags = asset.tags.length >= 2;
+  const collection = collections.find((c) => c.id === asset.collectionId);
+  return !hasDescription || !hasTags || !collection;
 }

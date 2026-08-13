@@ -133,6 +133,16 @@ export function ComparisonPage() {
       return;
     }
 
+    if (assetAId === assetBId) {
+      setError("Choose two different assets. An asset cannot be compared with itself.");
+      return;
+    }
+
+    if (!reason.trim()) {
+      setError("A comparison reason is required before confirming your decision.");
+      return;
+    }
+
     const result = submitComparison({
       itemA: {
         assetId: assetAId,
@@ -158,13 +168,40 @@ export function ComparisonPage() {
   return (
     <AppShell
       title="Asset Comparison"
-      description="Side-by-side curator comparison — human judgment, not automated ranking."
+      description="Compare two assets side by side. AI suggestions are labeled separately — the curator makes the final decision."
+      breadcrumbs={[
+        { label: "Dashboard", href: "/" },
+        { label: "Compare Assets" },
+      ]}
     >
       <div className="space-y-6">
+        {assets.length < 2 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-zinc-500">
+              At least two assets are needed to compare.{" "}
+              <Link href="/assets" className="text-indigo-600 hover:underline dark:text-indigo-400">
+                Return to Asset Library
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
         <div className="flex flex-wrap gap-4">
           <div>
-            <label htmlFor="compare-a" className="mb-1 block text-xs text-zinc-500">Asset A</label>
-            <Select id="compare-a" value={assetAId} onChange={(e) => { setAssetAId(e.target.value); setVersionAId(""); }}>
+            <label htmlFor="compare-a" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Asset A</label>
+            <Select
+              id="compare-a"
+              value={assetAId}
+              onChange={(e) => {
+                const nextA = e.target.value;
+                setAssetAId(nextA);
+                setVersionAId("");
+                if (assetBId === nextA) {
+                  const partner = findComparisonPartner(assets, nextA);
+                  setAssetBId(partner ?? assets.find((a) => a.id !== nextA)?.id ?? "");
+                }
+              }}
+            >
               {assetOptions.map((o) => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
@@ -178,9 +215,16 @@ export function ComparisonPage() {
             )}
           </div>
           <div>
-            <label htmlFor="compare-b" className="mb-1 block text-xs text-zinc-500">Asset B</label>
-            <Select id="compare-b" value={assetBId} onChange={(e) => { setAssetBId(e.target.value); setVersionBId(""); }}>
-              {assetOptions.map((o) => (
+            <label htmlFor="compare-b" className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Asset B</label>
+            <Select
+              id="compare-b"
+              value={assetBId}
+              onChange={(e) => {
+                setAssetBId(e.target.value);
+                setVersionBId("");
+              }}
+            >
+              {assetOptions.filter((o) => o.id !== assetAId).map((o) => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </Select>
@@ -201,10 +245,10 @@ export function ComparisonPage() {
 
         {comparisonSummary && <AIComparisonSummaryPanel summary={comparisonSummary} />}
 
-        <Card>
+        <Card className="border-zinc-300 dark:border-zinc-700">
           <CardHeader>
-            <h3 className="text-sm font-semibold">Comparison Decision</h3>
-            <p className="text-xs text-zinc-500">A reason is required before confirming</p>
+            <h3 className="text-sm font-semibold">Curator Comparison Decision</h3>
+            <p className="text-xs text-zinc-500">Human review required — explain your judgment before confirming</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <textarea
@@ -243,6 +287,8 @@ export function ComparisonPage() {
               </ul>
             </CardContent>
           </Card>
+        )}
+          </>
         )}
       </div>
     </AppShell>

@@ -7,6 +7,7 @@ import type { AssetStatus, AssetType, QueuePriority } from "@/types";
 import { assetTypeLabel, statusLabel } from "@/lib/utils";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
+import { EmptyState } from "./empty-state";
 import { CurationQueueItem } from "./curation-queue-item";
 
 type SortOption = "priority" | "quality-asc" | "newest" | "oldest";
@@ -79,7 +80,7 @@ export function CurationQueueList() {
           </Select>
           <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as AssetType | "all")} aria-label="Filter by type">
             <option value="all">All types</option>
-            {(["image", "video", "audio", "3d"] as AssetType[]).map((t) => (
+            {(["image", "video", "audio", "3d", "other"] as AssetType[]).map((t) => (
               <option key={t} value={t}>{assetTypeLabel(t)}</option>
             ))}
           </Select>
@@ -109,10 +110,12 @@ export function CurationQueueList() {
       </p>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
-          <p className="font-medium text-zinc-900 dark:text-zinc-100">Queue is clear</p>
-          <p className="mt-1 text-sm text-zinc-500">No assets match your filters.</p>
-        </div>
+        <EmptyState
+          title="Queue is clear"
+          description="No assets match your filters, or all items have been reviewed."
+          actionLabel="Asset Library"
+          actionHref="/assets"
+        />
       ) : (
         <ul className="space-y-3">
           {filtered.map((asset) => (

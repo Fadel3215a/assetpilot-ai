@@ -39,7 +39,7 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
                 AI-Assisted Analysis
               </h3>
               <p className="text-xs text-violet-600 dark:text-violet-400">
-                Simulated suggestions — not verified facts or real model inference
+                Simulated AI analysis — suggestions only; human review required
               </p>
             </div>
           </div>

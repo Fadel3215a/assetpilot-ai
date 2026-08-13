@@ -44,7 +44,7 @@ export function DecisionHistoryPanel({
                   </time>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Reviewer: {entry.reviewer}
+                  Curator: {entry.reviewer}
                   {entry.curatorScore !== undefined && ` · Score: ${entry.curatorScore}`}
                 </p>
                 {entry.reason && (

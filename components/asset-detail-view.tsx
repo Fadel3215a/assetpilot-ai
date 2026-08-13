@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { useAssets } from "@/lib/assets-context";
 import {
   assetTypeLabel,
+  findComparisonPartner,
   formatDate,
   formatFileSize,
   getCurrentVersion,
@@ -24,10 +25,11 @@ import { ReviewActions } from "./review-actions";
 import { DecisionHistoryPanel } from "./decision-history-panel";
 import { StatusBadge } from "./status-badge";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
 export function AssetDetailView({ assetId }: { assetId: string }) {
-  const { getAsset, collections } = useAssets();
+  const { getAsset, collections, assets } = useAssets();
   const asset = getAsset(assetId);
 
   if (!asset) {
@@ -36,25 +38,31 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
 
   const version = getCurrentVersion(asset);
   const collection = collections.find((c) => c.id === asset.collectionId);
+  const comparePartnerId = findComparisonPartner(assets, asset.id);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/assets"
-          className="inline-flex items-center gap-1 text-sm text-zinc-500 transition-colors hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-          Back to Asset Library
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/curation/${asset.id}`}>
+          <Button type="button">Review</Button>
         </Link>
-        <Link
-          href={`/curation/${asset.id}`}
-          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-        >
-          Open Review Workspace
-        </Link>
+        {comparePartnerId && (
+          <Link href={`/compare?a=${asset.id}&b=${comparePartnerId}`}>
+            <Button type="button" variant="secondary">
+              Compare
+            </Button>
+          </Link>
+        )}
+        <a href="#metadata-editor">
+          <Button type="button" variant="secondary">
+            Edit Metadata
+          </Button>
+        </a>
+        <a href="#version-management">
+          <Button type="button" variant="ghost">
+            Create Version
+          </Button>
+        </a>
       </div>
 
       {asset.isSessionUpload && (
@@ -211,7 +219,9 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
 
       <AIInsightPanel asset={asset} />
 
-      <VersionManagementPanel asset={asset} />
+      <div id="version-management">
+        <VersionManagementPanel asset={asset} />
+      </div>
 
       <AssetActivityTimeline assetId={asset.id} />
 

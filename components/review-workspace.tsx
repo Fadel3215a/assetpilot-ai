@@ -67,6 +67,11 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
 
   return (
     <div className="space-y-6">
+      <p className="rounded-lg border border-violet-200 bg-violet-50/50 px-4 py-3 text-sm text-violet-900 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-200">
+        <span className="font-semibold">AI suggests. You decide.</span> Simulated AI-Assisted Analysis appears
+        below. Curator Evaluation and final Approve / Request Changes / Reject actions are separate.
+      </p>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/curation"

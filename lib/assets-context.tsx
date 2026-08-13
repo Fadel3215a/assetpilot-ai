@@ -84,7 +84,7 @@ interface AssetsContextValue {
   dismissObservation: (assetId: string, observationId: string) => void;
   acceptObservation: (assetId: string, observationId: string) => void;
   getAssetFeedback: (assetId: string) => CuratorFeedbackEntry[];
-  uploadAsset: (file: File, collectionId?: string) => Promise<{ ok: boolean; error?: string }>;
+  uploadAsset: (file: File, collectionId?: string) => Promise<{ ok: boolean; error?: string; assetId?: string }>;
   updateAssetMetadata: (assetId: string, payload: MetadataEditPayload) => { ok: boolean; error?: string };
   createAssetVersion: (
     assetId: string,
@@ -112,6 +112,7 @@ interface AssetsContextValue {
   };
   aiStats: AIAssistanceStats;
   getAllDecisionHistory: () => DecisionHistoryEntry[];
+  resetDemo: () => void;
 }
 
 const AssetsContext = createContext<AssetsContextValue | null>(null);
@@ -140,7 +141,7 @@ function mapActionToStatus(action: ReviewAction): AssetStatus {
 }
 
 export function AssetsProvider({ children }: { children: ReactNode }) {
-  const { register: registerObjectUrl } = useObjectUrlRegistry();
+  const { register: registerObjectUrl, revokeAll: revokeAllObjectUrls } = useObjectUrlRegistry();
   const [assets, setAssets] = useState<Asset[]>(mockAssets);
   const [activity, setActivity] = useState<ActivityItem[]>(mockActivity);
   const [comparisons, setComparisons] = useState<ComparisonRecord[]>(mockComparisons);
@@ -494,7 +495,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           source: "ai",
         });
 
-        return { ok: true };
+        return { ok: true, assetId: asset.id };
       } catch {
         return { ok: false, error: "Could not process uploaded file." };
       }
@@ -869,6 +870,17 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       );
   }, [assets]);
 
+  const resetDemo = useCallback(() => {
+    revokeAllObjectUrls();
+    setAssets(mockAssets);
+    setActivity(mockActivity);
+    setComparisons(mockComparisons);
+    setFeedback([]);
+    setAiSessions({});
+    setIgnoredDuplicates(new Set());
+    setTimelineExtras([]);
+  }, [revokeAllObjectUrls]);
+
   const aiStats = useMemo((): AIAssistanceStats => {
     const accepted = feedback.filter((f) => f.curatorAction === "accepted").length;
     const edited = feedback.filter((f) => f.curatorAction === "edited").length;
@@ -945,6 +957,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       stats,
       aiStats,
       getAllDecisionHistory,
+      resetDemo,
     }),
     [
       assets,
@@ -979,6 +992,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       stats,
       aiStats,
       getAllDecisionHistory,
+      resetDemo,
     ],
   );
 

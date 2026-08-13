@@ -1,34 +1,125 @@
 # AssetPilot AI
 
-An experimental AI asset curation and digital asset management workspace.
+**Human-in-the-loop AI-assisted digital asset curation.**
 
-AssetPilot AI explores a **human-in-the-loop approach to AI-assisted digital asset curation**. It is a portfolio prototype demonstrating how a human curator can organize, evaluate, compare, classify, and prepare AI-generated digital assets for production. It is **not** a production enterprise DAM system.
+AssetPilot AI is an independent experimental portfolio project exploring how a human curator can organize, evaluate, compare, classify, and prepare digital assets for production—with simulated AI assistance that never replaces human judgment.
 
-## Important transparency
+It is **not** a commercial product, **not** connected to a real organization, and **not** a production enterprise DAM system.
 
-- **AI analysis is simulated** in the current prototype — no real AI inference is connected
-- **Final decisions remain with the human curator** — AI suggests, humans decide
-- **No production client data** is used — all assets and collections are fictional
-- **Confidence levels are demo labels** — not calibrated model probabilities
-- **Uploaded files are session-only** — not stored on a server; refresh may clear them
+---
+
+## Overview
+
+AssetPilot models an internal creative-operations workflow: assets arrive, metadata is managed, quality is assessed, AI offers suggestions, and a curator makes every final decision.
+
+The application runs entirely in the browser with session-only state—no database, authentication, or external AI APIs.
+
+## Problem
+
+Digital asset teams face growing volume, inconsistent metadata, duplicate files, version sprawl, and pressure to move assets to production quickly. AI can help surface patterns and suggestions, but approval, rejection, and production readiness require accountable human judgment.
+
+## Solution
+
+AssetPilot demonstrates a structured curation workflow where:
+
+1. Assets are discovered and organized (library, collections, search, filters)
+2. Metadata is extracted and edited locally
+3. Simulated AI analysis suggests tags, collections, and observations
+4. Curators evaluate quality via checklist and scoring
+5. Comparisons and version history support decision-making
+6. Production readiness is checklist-driven—not AI-automated
+
+**Core design principle:** AI assists the curator. The curator makes the final decision.
+
+## Key Features
+
+| Area | Capabilities |
+|------|----------------|
+| **Asset management** | Session-only upload, real image/video/audio previews, metadata extraction & editing, search, filters, bulk ops, versions |
+| **Discovery** | Related assets (metadata-based), possible duplicates (metadata-based), asset health |
+| **Curation** | Queue, review workspace, quality checklist, curator quality score, decision history |
+| **AI assistance** | Simulated analysis, tag/collection/observation suggestions, comparison & readiness summaries |
+| **Production** | Checklist-based readiness, blocking-item visibility, curator-driven status |
+| **Operations** | Dashboard metrics, reviews history, activity timeline, demo session reset |
 
 ## Workflow
 
 ```
-AI-generated asset → Intake → Organization → Curation → Quality review
-→ Classification → Comparison → Approve / Reject → Version tracking → Production readiness
+Discover → Understand → Review → Decide → Prepare for Production
 ```
 
-Human judgment drives approval decisions. AI assists with suggestions; curators review, accept, edit, or dismiss them.
+**Recommended demo path:**
 
-## Tech Stack
+Dashboard → Curation Queue → Review Workspace → Compare Assets → Production Readiness
 
-- **Next.js 16** (App Router)
-- **React 19**
-- **TypeScript**
-- **Tailwind CSS v4**
+**Also try:** Asset Library → Upload → Extracted Metadata → Edit Metadata → Related Assets → Versions
 
-## Getting Started
+## AI Architecture
+
+```
+Asset data → AIAnalysisProvider → AIAnalysisResult → UI
+```
+
+- **`AIAnalysisProvider`** interface defines the boundary
+- **`MockAIAnalysisProvider`** is the current deterministic implementation
+- UI components consume `asset.aiAnalysis`—not the mock generator directly
+- A real model could replace the provider without rewriting the UI
+
+AI outputs are labeled **AI Suggestion**, **Simulated AI Analysis**, or **Demo Confidence** throughout the app.
+
+## Human-in-the-Loop Design
+
+- AI suggestions require explicit Accept, Edit, or Dismiss
+- Approve / Request Changes / Reject are curator-only actions
+- Comparison and production decisions require curator reasons
+- Curator Feedback history records human responses—it is not model training
+- Nothing is auto-approved or auto-rejected by AI
+
+## Asset Management Capabilities
+
+- **Upload:** Browser File API, object URLs, session-only storage
+- **Metadata:** Extracted (file properties) vs AI suggestions clearly separated
+- **Duplicates:** Metadata-based detection—not visual or AI similarity
+- **Related assets:** Collection, tags, type, description keywords
+- **Versions:** Create without deleting prior versions
+- **Bulk ops:** Add/remove tags, move collection (with confirmation)
+
+## Technology Stack
+
+- Next.js 16 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- React Context (session state)
+
+No database, auth, cloud storage, or external AI services.
+
+## Design Decisions
+
+- **Session-only state** keeps the demo self-contained and privacy-safe
+- **Deterministic mock AI** makes portfolio demos reproducible without API keys
+- **Explicit labeling** prevents misleading claims about real inference
+- **Checklist-driven production** mirrors real DAM governance patterns
+- **Provider abstraction** documents intent for future real AI integration
+
+## Limitations
+
+- Uploads and edits are lost on refresh (session-only)
+- No persistent storage, user accounts, or multi-tenant support
+- AI is simulated—not connected to OpenAI, Gemini, Anthropic, or similar
+- Duplicate and related-asset discovery is metadata-based only
+- Seeded demo assets are fictional—not real client work
+- Confidence levels are demo labels, not calibrated probabilities
+
+## Future Improvements
+
+- Optional real AI provider behind `AIAnalysisProvider`
+- Persistent storage with proper auth (outside portfolio scope)
+- Visual similarity / perceptual duplicate detection
+- Export and delivery integrations
+- Team roles and audit trails
+
+## Running Locally
 
 ```bash
 npm install
@@ -37,65 +128,40 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Scripts
-
 | Command | Description |
-|---|---|
-| `npm run dev` | Start development server |
+|---------|-------------|
+| `npm run dev` | Development server |
 | `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
+| `npm run start` | Production server |
+| `npm run lint` | ESLint |
+
+## Portfolio / Demo Notes
+
+- Use **Reset demo session** in the sidebar to restore seeded data and clear session changes
+- All asset names, collections, and curator identities are fictional
+- Files uploaded during a session are processed locally and never sent to a server
+- This project is suitable for demonstrating DAM operations, metadata discipline, quality control, and human-in-the-loop AI workflow design
 
 ## Project Structure
 
 ```
-app/           # Next.js App Router pages
+app/           # Next.js routes
 components/    # UI and feature components
-components/ui/ # Primitive UI elements
-data/          # Mock seed data
-lib/           # Utilities and React context
-types/         # TypeScript domain types
-public/        # Static assets and thumbnails
+components/ui/ # Primitives
+data/          # Seeded mock assets and collections
+lib/           # Context, AI provider, utilities
+types/         # Domain types
+public/        # Static demo thumbnails
 ```
 
-## Features
+## Phases
 
-### Phase 1 — Foundation
-- Dashboard, Asset Library, session-based review state
+- **Phase 1** — Foundation (dashboard, library, review state)
+- **Phase 2** — Curation workflow (queue, checklist, comparison, collections, production readiness)
+- **Phase 3** — AI-assisted intelligence (simulated analysis, suggestions, feedback)
+- **Phase 4** — Asset intelligence & media management (upload, metadata, duplicates, versions, bulk ops)
+- **Phase 5** — Production polish & portfolio readiness (UX, accessibility, demo reset, documentation)
 
-### Phase 2 — Curation Workflow
-- Curation Queue, Review Workspace, quality checklist, comparison, collections, production readiness
+---
 
-### Phase 3 — AI-Assisted Intelligence
-- Simulated AI analysis panel in review workspace
-- Tag, collection, and observation suggestions with Accept / Edit / Dismiss
-- AI comparison and production readiness summaries
-- Curator Feedback history (not model training)
-- Dashboard AI assistance metrics
-
-### Phase 4 — Asset Intelligence & Media Management
-- **Session-only asset ingestion** via browser File API (no server upload, no persistent storage)
-- **Real media previews** for uploaded images, video, and audio; placeholders for 3D and other files
-- **Extracted metadata** panel (filename, size, MIME type, dimensions, duration) — clearly separate from AI suggestions
-- **Metadata editor** for name, description, tags, collection, and usage notes
-- **Extended search and filtering** across name, description, tags, collection, type, status, priority, quality, and production readiness
-- **Metadata-based duplicate detection** with Review / Ignore actions (not visual or AI similarity)
-- **Related asset discovery** from collection, tags, type, and description keywords
-- **Version management** — create versions, view history, compare via existing comparison flow
-- **Activity timeline** on asset detail with AI vs curator vs system labels
-- **Bulk operations** — add/remove tags, move to collection (with confirmation)
-- **Asset health** summary from live session criteria
-- **AI provider boundary** (`AIAnalysisProvider` / `MockAIAnalysisProvider`) for future real model integration
-
-## Phase 4 limitations
-
-- Uploads are **session-only** — refreshing the page may remove uploaded assets
-- **No production storage**, authentication, database, or external API calls
-- **No real client assets** — seeded demo assets remain; uploads are local to your browser
-- **AI remains simulated** — deterministic mock analysis, not connected to a real model
-- **Duplicate detection is metadata-based** — not perceptual or visual similarity
-- **Related asset discovery is metadata-based** — not AI unless using existing AI suggestion layers
-
-## Demo Data
-
-All assets, collections, quality scores, AI suggestions, and curator names are fictional. No real client work is represented.
+*AssetPilot AI — independent portfolio project. Simulated AI. Human decisions.*
