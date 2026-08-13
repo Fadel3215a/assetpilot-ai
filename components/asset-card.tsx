@@ -11,16 +11,22 @@ import { QualityScoreDisplay } from "./quality-score-display";
 interface AssetCardProps {
   asset: Asset;
   collection?: Collection;
+  bulkMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function AssetCard({ asset, collection }: AssetCardProps) {
+export function AssetCard({
+  asset,
+  collection,
+  bulkMode = false,
+  selected = false,
+  onToggleSelect,
+}: AssetCardProps) {
   const version = getCurrentVersion(asset);
 
-  return (
-    <Link
-      href={`/assets/${asset.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800"
-    >
+  const inner = (
+    <>
       <AssetThumbnail
         src={version.thumbnailPath}
         alt={`Thumbnail for ${asset.name}`}
@@ -39,6 +45,12 @@ export function AssetCard({ asset, collection }: AssetCardProps) {
           <span>{assetTypeLabel(asset.type)}</span>
           <span aria-hidden="true">·</span>
           <span>v{version.versionNumber}</span>
+          {asset.isSessionUpload && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="text-amber-600 dark:text-amber-400">Session upload</span>
+            </>
+          )}
           {collection && (
             <>
               <span aria-hidden="true">·</span>
@@ -63,6 +75,41 @@ export function AssetCard({ asset, collection }: AssetCardProps) {
 
         <QualityScoreDisplay score={version.qualityScore} compact />
       </div>
+    </>
+  );
+
+  if (bulkMode) {
+    return (
+      <div
+        className={`relative flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-zinc-900 ${
+          selected
+            ? "border-indigo-400 ring-2 ring-indigo-200 dark:border-indigo-600 dark:ring-indigo-900"
+            : "border-zinc-200 dark:border-zinc-800"
+        }`}
+      >
+        <label className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium dark:bg-zinc-900/90">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Select ${asset.name}`}
+            className="rounded border-zinc-300"
+          />
+          Select
+        </label>
+        <Link href={`/assets/${asset.id}`} className="group flex flex-1 flex-col">
+          {inner}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={`/assets/${asset.id}`}
+      className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800"
+    >
+      {inner}
     </Link>
   );
 }

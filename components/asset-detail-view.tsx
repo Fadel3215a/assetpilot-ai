@@ -10,7 +10,15 @@ import {
   getCurrentVersion,
   statusLabel,
 } from "@/lib/utils";
-import { AssetThumbnail } from "./asset-thumbnail";
+import { AIInsightPanel } from "./ai-insight-panel";
+import { AssetActivityTimeline } from "./asset-activity-timeline";
+import { AssetHealthPanel } from "./asset-health-panel";
+import { AssetMediaPreview } from "./asset-media-preview";
+import { DuplicateDetectionPanel } from "./duplicate-detection-panel";
+import { ExtractedMetadataPanel } from "./extracted-metadata-panel";
+import { MetadataEditor } from "./metadata-editor";
+import { RelatedAssetsPanel } from "./related-assets-panel";
+import { VersionManagementPanel } from "./version-management-panel";
 import { QualityScoreDisplay } from "./quality-score-display";
 import { ReviewActions } from "./review-actions";
 import { DecisionHistoryPanel } from "./decision-history-panel";
@@ -49,17 +57,17 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
         </Link>
       </div>
 
+      {asset.isSessionUpload && (
+        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          Session-only upload — this asset exists only in your current browser session. Refreshing
+          the page may remove it.
+        </p>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <Card className="overflow-hidden">
-            <AssetThumbnail
-              src={version.previewPath}
-              alt={`Preview of ${asset.name}`}
-              type={asset.type}
-              className="aspect-video w-full"
-              priority
-              sizes="(max-width: 1024px) 100vw, 60vw"
-            />
+            <AssetMediaPreview asset={asset} priority />
             <CardContent>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={asset.status} />
@@ -83,6 +91,8 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
         </div>
 
         <div className="space-y-6 lg:col-span-2">
+          <AssetHealthPanel assetId={asset.id} />
+
           <Card>
             <CardHeader>
               <h3 className="text-sm font-semibold">Review Score</h3>
@@ -115,9 +125,11 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <ExtractedMetadataPanel asset={asset} />
+
         <Card>
           <CardHeader>
-            <h3 className="text-sm font-semibold">Metadata</h3>
+            <h3 className="text-sm font-semibold">Asset Metadata</h3>
           </CardHeader>
           <CardContent>
             <dl className="space-y-3 text-sm">
@@ -147,20 +159,6 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
                   <dd className="font-medium">{version.metadata.duration}s</dd>
                 </div>
               )}
-              {version.metadata.generator && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Generator</dt>
-                  <dd className="font-medium">{version.metadata.generator}</dd>
-                </div>
-              )}
-              {version.metadata.prompt && (
-                <div>
-                  <dt className="text-zinc-500 dark:text-zinc-400">Prompt</dt>
-                  <dd className="mt-1 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
-                    {version.metadata.prompt}
-                  </dd>
-                </div>
-              )}
               <div className="flex justify-between gap-4">
                 <dt className="text-zinc-500 dark:text-zinc-400">Created</dt>
                 <dd className="font-medium">{formatDate(version.metadata.createdAt)}</dd>
@@ -168,7 +166,11 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
             </dl>
           </CardContent>
         </Card>
+      </div>
 
+      <MetadataEditor asset={asset} collections={collections} />
+
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <h3 className="text-sm font-semibold">Organization</h3>
@@ -199,59 +201,21 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Status</p>
               <p className="mt-1 text-sm font-medium">{statusLabel(asset.status)}</p>
             </div>
-            {version.reviewDecision.notes && (
-              <div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Review notes</p>
-                <p className="mt-1 text-sm">{version.reviewDecision.notes}</p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  — {version.reviewDecision.reviewer}, {formatDate(version.reviewDecision.decidedAt)}
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        <RelatedAssetsPanel assetId={asset.id} />
       </div>
 
-      <DecisionHistoryPanel history={asset.decisionHistory} />
+      <DuplicateDetectionPanel assetId={asset.id} />
 
-      <Card>
-        <CardHeader>
-          <h3 className="text-sm font-semibold">Version History</h3>
-        </CardHeader>
-        <CardContent>
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {asset.versions.map((v) => (
-              <li key={v.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    v{v.versionNumber} — {v.label}
-                    {v.isCurrent && (
-                      <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400">
-                        (current)
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDate(v.createdAt)} · Quality {v.qualityScore.overall} ·{" "}
-                    {v.reviewDecision.type.replace("_", " ").toLowerCase()}
-                  </p>
-                </div>
-                <StatusBadge
-                  status={
-                    v.reviewDecision.type === "PENDING"
-                      ? "IN_REVIEW"
-                      : v.reviewDecision.type === "APPROVED"
-                        ? "APPROVED"
-                        : v.reviewDecision.type === "REJECTED"
-                          ? "REJECTED"
-                          : "CHANGES_REQUESTED"
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      <AIInsightPanel asset={asset} />
+
+      <VersionManagementPanel asset={asset} />
+
+      <AssetActivityTimeline assetId={asset.id} />
+
+      <DecisionHistoryPanel history={asset.decisionHistory} />
     </div>
   );
 }

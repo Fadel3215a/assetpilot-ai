@@ -7,7 +7,7 @@ export function AssetLibraryPage() {
   return (
     <AppShell
       title="Asset Library"
-      description="Browse, filter, and inspect AI-generated demo assets across collections."
+      description="Browse, upload session-only assets, search, filter, and inspect your library."
     >
       <AssetGrid />
     </AppShell>

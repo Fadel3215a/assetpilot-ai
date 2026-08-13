@@ -1,58 +1,50 @@
-import type { AssetStatus, AssetType, Collection } from "@/types";
-import { statusLabel } from "@/lib/utils";
-import { assetTypeLabel } from "@/lib/utils";
+"use client";
+
+import { useState } from "react";
+import type { AssetFilterState, Collection } from "@/types";
+import { assetTypeLabel, statusLabel } from "@/lib/utils";
+import {
+  assetStatusFilterOptions,
+  assetTypeFilterOptions,
+} from "@/lib/asset-search";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
+import { Button } from "./ui/button";
 
 interface AssetFiltersProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  typeFilter: AssetType | "all";
-  onTypeChange: (value: AssetType | "all") => void;
-  statusFilter: AssetStatus | "all";
-  onStatusChange: (value: AssetStatus | "all") => void;
-  collectionFilter: string;
-  onCollectionChange: (value: string) => void;
+  filters: AssetFilterState;
+  onFiltersChange: (filters: AssetFilterState) => void;
   collections: Collection[];
   resultCount: number;
+  totalCount: number;
 }
 
-const statuses: AssetStatus[] = [
-  "DRAFT",
-  "IN_REVIEW",
-  "CHANGES_REQUESTED",
-  "APPROVED",
-  "REJECTED",
-  "PRODUCTION_READY",
-];
-
-const types: AssetType[] = ["image", "video", "audio", "3d"];
-
 export function AssetFilters({
-  search,
-  onSearchChange,
-  typeFilter,
-  onTypeChange,
-  statusFilter,
-  onStatusChange,
-  collectionFilter,
-  onCollectionChange,
+  filters,
+  onFiltersChange,
   collections,
   resultCount,
+  totalCount,
 }: AssetFiltersProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  const update = (partial: Partial<AssetFilterState>) => {
+    onFiltersChange({ ...filters, ...partial });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="flex-1">
           <label htmlFor="asset-search" className="sr-only">
-            Search assets by name
+            Search assets
           </label>
           <Input
             id="asset-search"
             type="search"
-            placeholder="Search by asset name..."
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search name, description, tags, collection, type, status…"
+            value={filters.search}
+            onChange={(e) => update({ search: e.target.value })}
           />
         </div>
         <div className="flex flex-wrap gap-3">
@@ -62,13 +54,12 @@ export function AssetFilters({
             </label>
             <Select
               id="type-filter"
-              value={typeFilter}
-              onChange={(e) => onTypeChange(e.target.value as AssetType | "all")}
+              value={filters.type}
+              onChange={(e) => update({ type: e.target.value })}
             >
-              <option value="all">All types</option>
-              {types.map((type) => (
+              {assetTypeFilterOptions.map((type) => (
                 <option key={type} value={type}>
-                  {assetTypeLabel(type)}
+                  {type === "all" ? "All types" : assetTypeLabel(type)}
                 </option>
               ))}
             </Select>
@@ -79,13 +70,12 @@ export function AssetFilters({
             </label>
             <Select
               id="status-filter"
-              value={statusFilter}
-              onChange={(e) => onStatusChange(e.target.value as AssetStatus | "all")}
+              value={filters.status}
+              onChange={(e) => update({ status: e.target.value })}
             >
-              <option value="all">All statuses</option>
-              {statuses.map((status) => (
+              {assetStatusFilterOptions.map((status) => (
                 <option key={status} value={status}>
-                  {statusLabel(status)}
+                  {status === "all" ? "All statuses" : statusLabel(status)}
                 </option>
               ))}
             </Select>
@@ -96,8 +86,8 @@ export function AssetFilters({
             </label>
             <Select
               id="collection-filter"
-              value={collectionFilter}
-              onChange={(e) => onCollectionChange(e.target.value)}
+              value={filters.collection}
+              onChange={(e) => update({ collection: e.target.value })}
             >
               <option value="all">All collections</option>
               {collections.map((col) => (
@@ -107,10 +97,68 @@ export function AssetFilters({
               ))}
             </Select>
           </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? "Fewer filters" : "More filters"}
+          </Button>
         </div>
       </div>
+
+      {expanded && (
+        <div className="flex flex-wrap gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+          <div>
+            <label htmlFor="priority-filter" className="sr-only">
+              Filter by priority
+            </label>
+            <Select
+              id="priority-filter"
+              value={filters.priority}
+              onChange={(e) => update({ priority: e.target.value })}
+            >
+              <option value="all">All priorities</option>
+              <option value="high">High priority</option>
+              <option value="medium">Medium priority</option>
+              <option value="low">Low priority</option>
+            </Select>
+          </div>
+          <div>
+            <label htmlFor="quality-filter" className="sr-only">
+              Minimum quality score
+            </label>
+            <Select
+              id="quality-filter"
+              value={filters.minQuality}
+              onChange={(e) => update({ minQuality: e.target.value })}
+            >
+              <option value="all">Any quality score</option>
+              <option value="70">Quality ≥ 70</option>
+              <option value="80">Quality ≥ 80</option>
+              <option value="90">Quality ≥ 90</option>
+            </Select>
+          </div>
+          <div>
+            <label htmlFor="production-filter" className="sr-only">
+              Production readiness
+            </label>
+            <Select
+              id="production-filter"
+              value={filters.productionReady}
+              onChange={(e) => update({ productionReady: e.target.value })}
+            >
+              <option value="all">Any production status</option>
+              <option value="ready">Production ready</option>
+              <option value="not-ready">Not production ready</option>
+            </Select>
+          </div>
+        </div>
+      )}
+
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Showing {resultCount} asset{resultCount !== 1 ? "s" : ""}
+        Showing {resultCount} of {totalCount} asset{totalCount !== 1 ? "s" : ""}
       </p>
     </div>
   );

@@ -1,4 +1,17 @@
 export type {
+  AssetFilterState,
+  AssetHealth,
+  AssetHealthItem,
+  AssetHealthStatus,
+  AssetTimelineEntry,
+  DuplicateCandidate,
+  ExtractedFileMetadata,
+  MetadataEditPayload,
+  RelatedAsset,
+  UploadCategory,
+} from "./media";
+
+export type {
   AIAnalysis,
   AIAssistanceStats,
   AIComparisonSummary,

@@ -14,6 +14,7 @@ const TYPE_TAG_MAP: Record<Asset["type"], string[]> = {
   video: ["motion", "clip"],
   audio: ["sound", "audio"],
   "3d": ["3d-asset", "model"],
+  other: ["file", "document"],
 };
 
 const TYPE_LABEL: Record<Asset["type"], string> = {
@@ -21,6 +22,7 @@ const TYPE_LABEL: Record<Asset["type"], string> = {
   video: "video",
   audio: "audio",
   "3d": "3D",
+  other: "file",
 };
 
 function deriveConfidence(asset: Asset): AIConfidenceLevel {

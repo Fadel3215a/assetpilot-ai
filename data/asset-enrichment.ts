@@ -1,6 +1,6 @@
 import type { Asset, AssetStatus, DecisionHistoryEntry, QueuePriority } from "@/types";
 import { collections } from "@/data/collections";
-import { generateAIAnalysis } from "@/lib/generate-ai-analysis";
+import { getAIAnalysisProvider } from "@/lib/ai";
 import { deriveChecklistFromScore } from "@/lib/quality";
 import { PRODUCTION_CRITERIA, evaluateProductionCriteria } from "@/lib/production";
 
@@ -107,7 +107,7 @@ export function enrichMockAssets(rawAssets: RawAsset[]): Asset[] {
       readyAt: prod.ready ? enriched.updatedAt : undefined,
     };
 
-    enriched.aiAnalysis = generateAIAnalysis(enriched, collections);
+    enriched.aiAnalysis = getAIAnalysisProvider().analyze(enriched, collections);
 
     return enriched;
   });

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { useAssets } from "@/lib/assets-context";
-import { generateComparisonSummary } from "@/lib/generate-ai-analysis";
+import { getAIAnalysisProvider } from "@/lib/ai";
 import { metadataCompleteness } from "@/lib/quality";
 import { comparisonDecisionLabel } from "@/lib/production";
 import { assetTypeLabel, findComparisonPartner, getCurrentVersion } from "@/lib/utils";
@@ -114,7 +114,7 @@ export function ComparisonPage() {
 
   const comparisonSummary = useMemo(() => {
     if (!assetA || !assetB) return null;
-    return generateComparisonSummary(assetA, assetB, collections);
+    return getAIAnalysisProvider().compare(assetA, assetB, collections);
   }, [assetA, assetB, collections]);
 
   function getItemLabel(assetId: string, versionId: string) {

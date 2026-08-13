@@ -14,6 +14,17 @@ import {
   mockAssets,
   mockComparisons,
 } from "@/data";
+import { applyAIAndProduction, useObjectUrlRegistry } from "@/lib/object-url-registry";
+import { buildAssetTimeline, createTimelineEvent } from "@/lib/asset-timeline";
+import { computeAssetHealth } from "@/lib/asset-health";
+import {
+  countPossibleDuplicates,
+  findDuplicateCandidates,
+  getAssetsWithMetadataIssues,
+} from "@/lib/duplicate-detection";
+import { extractFileMetadata, inferUploadCategory, mapCategoryToAssetType } from "@/lib/file-metadata";
+import { findRelatedAssets } from "@/lib/related-assets";
+import { buildNewVersion, buildUploadedAsset } from "@/lib/upload-asset";
 import { calculateCuratorScore } from "@/lib/quality";
 import { evaluateProductionCriteria, isQueueAsset } from "@/lib/production";
 import { statusFromDecision } from "@/lib/utils";
@@ -22,14 +33,19 @@ import type {
   AIAssistanceStats,
   Asset,
   AssetAISessionState,
+  AssetHealth,
   AssetStatus,
+  AssetTimelineEntry,
   ChecklistRating,
   Collection,
   ComparisonDecisionType,
   ComparisonRecord,
   CuratorFeedbackEntry,
   DecisionHistoryEntry,
+  DuplicateCandidate,
+  MetadataEditPayload,
   QualityCriterion,
+  RelatedAsset,
   ReviewDecisionType,
 } from "@/types";
 
@@ -68,6 +84,21 @@ interface AssetsContextValue {
   dismissObservation: (assetId: string, observationId: string) => void;
   acceptObservation: (assetId: string, observationId: string) => void;
   getAssetFeedback: (assetId: string) => CuratorFeedbackEntry[];
+  uploadAsset: (file: File, collectionId?: string) => Promise<{ ok: boolean; error?: string }>;
+  updateAssetMetadata: (assetId: string, payload: MetadataEditPayload) => { ok: boolean; error?: string };
+  createAssetVersion: (
+    assetId: string,
+    file: File | null,
+    label: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  ignoreDuplicate: (duplicateId: string) => void;
+  getDuplicateCandidates: (assetId: string) => DuplicateCandidate[];
+  getRelatedAssets: (assetId: string) => RelatedAsset[];
+  getAssetHealth: (assetId: string) => AssetHealth | null;
+  getAssetTimeline: (assetId: string) => AssetTimelineEntry[];
+  bulkAddTag: (assetIds: string[], tag: string) => void;
+  bulkRemoveTag: (assetIds: string[], tag: string) => void;
+  bulkMoveToCollection: (assetIds: string[], collectionId: string) => void;
   stats: {
     total: number;
     pendingReview: number;
@@ -76,6 +107,8 @@ interface AssetsContextValue {
     productionReady: number;
     rejected: number;
     changeRequests: number;
+    metadataIssues: number;
+    possibleDuplicates: number;
   };
   aiStats: AIAssistanceStats;
   getAllDecisionHistory: () => DecisionHistoryEntry[];
@@ -107,11 +140,14 @@ function mapActionToStatus(action: ReviewAction): AssetStatus {
 }
 
 export function AssetsProvider({ children }: { children: ReactNode }) {
+  const { register: registerObjectUrl } = useObjectUrlRegistry();
   const [assets, setAssets] = useState<Asset[]>(mockAssets);
   const [activity, setActivity] = useState<ActivityItem[]>(mockActivity);
   const [comparisons, setComparisons] = useState<ComparisonRecord[]>(mockComparisons);
   const [feedback, setFeedback] = useState<CuratorFeedbackEntry[]>([]);
   const [aiSessions, setAiSessions] = useState<Record<string, AssetAISessionState>>({});
+  const [ignoredDuplicates, setIgnoredDuplicates] = useState<Set<string>>(new Set());
+  const [timelineExtras, setTimelineExtras] = useState<AssetTimelineEntry[]>([]);
 
   const addActivity = useCallback(
     (item: Omit<ActivityItem, "id">) => {
@@ -427,6 +463,250 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
     [feedback],
   );
 
+  const uploadAsset = useCallback(
+    async (file: File, collectionId = "col-archive-draft") => {
+      try {
+        const extracted = await extractFileMetadata(file);
+        const category = inferUploadCategory(file);
+        const type = mapCategoryToAssetType(category);
+        const objectUrl = registerObjectUrl(URL.createObjectURL(file));
+        let asset = buildUploadedAsset(extracted, type, objectUrl, collectionId, collections);
+        asset = applyAIAndProduction(asset, collections);
+
+        setAssets((prev) => [asset, ...prev]);
+
+        const event = createTimelineEvent(asset.id, "Asset uploaded (session-only)", "system");
+        setTimelineExtras((prev) => [event, ...prev]);
+
+        addActivity({
+          assetId: asset.id,
+          assetName: asset.name,
+          action: "Asset uploaded (session-only)",
+          timestamp: new Date().toISOString(),
+          source: "curator",
+        });
+
+        addActivity({
+          assetId: asset.id,
+          assetName: asset.name,
+          action: "AI analysis generated for uploaded asset",
+          timestamp: new Date().toISOString(),
+          source: "ai",
+        });
+
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Could not process uploaded file." };
+      }
+    },
+    [addActivity, registerObjectUrl],
+  );
+
+  const updateAssetMetadata = useCallback(
+    (assetId: string, payload: MetadataEditPayload) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return { ok: false, error: "Asset not found." };
+
+      const now = new Date().toISOString();
+
+      setAssets((prev) =>
+        prev.map((a) => {
+          if (a.id !== assetId) return a;
+          const versions = a.versions.map((v) =>
+            v.isCurrent
+              ? {
+                  ...v,
+                  metadata: {
+                    ...v.metadata,
+                    title: payload.name,
+                    description: payload.description,
+                    updatedAt: now,
+                  },
+                }
+              : v,
+          );
+          const updated = applyAIAndProduction(
+            {
+              ...a,
+              name: payload.name,
+              tags: payload.tags,
+              collectionId: payload.collectionId,
+              usageNotes: payload.usageNotes,
+              versions,
+              updatedAt: now,
+            },
+            collections,
+          );
+          return updated;
+        }),
+      );
+
+      const event = createTimelineEvent(assetId, "Metadata updated by curator", "curator");
+      setTimelineExtras((prev) => [event, ...prev]);
+
+      addActivity({
+        assetId,
+        assetName: payload.name,
+        action: "Metadata updated",
+        timestamp: now,
+        source: "curator",
+      });
+
+      return { ok: true };
+    },
+    [assets, addActivity],
+  );
+
+  const createAssetVersion = useCallback(
+    async (assetId: string, file: File | null, label: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return { ok: false, error: "Asset not found." };
+
+      try {
+        let objectUrl: string | null = null;
+        let extracted = null;
+        if (file) {
+          extracted = await extractFileMetadata(file);
+          objectUrl = registerObjectUrl(URL.createObjectURL(file));
+        }
+
+        let updated = buildNewVersion(asset, objectUrl, extracted, label);
+        updated = applyAIAndProduction(updated, collections);
+
+        setAssets((prev) => prev.map((a) => (a.id === assetId ? updated : a)));
+
+        const event = createTimelineEvent(
+          assetId,
+          `Version ${updated.versions.find((v) => v.isCurrent)?.versionNumber} created`,
+          "curator",
+        );
+        setTimelineExtras((prev) => [event, ...prev]);
+
+        addActivity({
+          assetId,
+          assetName: asset.name,
+          action: `Version created: ${label}`,
+          timestamp: new Date().toISOString(),
+          source: "curator",
+        });
+
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Could not create version." };
+      }
+    },
+    [assets, addActivity, registerObjectUrl],
+  );
+
+  const ignoreDuplicate = useCallback((duplicateId: string) => {
+    setIgnoredDuplicates((prev) => new Set([...prev, duplicateId]));
+  }, []);
+
+  const getDuplicateCandidates = useCallback(
+    (assetId: string) => findDuplicateCandidates(assets, assetId, ignoredDuplicates),
+    [assets, ignoredDuplicates],
+  );
+
+  const getRelatedAssets = useCallback(
+    (assetId: string) => findRelatedAssets(assets, assetId, collections),
+    [assets],
+  );
+
+  const getAssetHealth = useCallback(
+    (assetId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return null;
+      return computeAssetHealth(asset);
+    },
+    [assets],
+  );
+
+  const getAssetTimeline = useCallback(
+    (assetId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return [];
+      return buildAssetTimeline(
+        asset,
+        activity,
+        feedback,
+        timelineExtras.filter((e) => e.assetId === assetId),
+      );
+    },
+    [assets, activity, feedback, timelineExtras],
+  );
+
+  const bulkAddTag = useCallback(
+    (assetIds: string[], tag: string) => {
+      const trimmed = tag.trim();
+      if (!trimmed) return;
+      const now = new Date().toISOString();
+      setAssets((prev) =>
+        prev.map((a) =>
+          assetIds.includes(a.id) && !a.tags.includes(trimmed)
+            ? applyAIAndProduction({ ...a, tags: [...a.tags, trimmed], updatedAt: now }, collections)
+            : a,
+        ),
+      );
+      assetIds.forEach((id) => {
+        const asset = assets.find((a) => a.id === id);
+        if (asset) {
+          addActivity({
+            assetId: id,
+            assetName: asset.name,
+            action: `Bulk tag added: "${trimmed}"`,
+            timestamp: now,
+            source: "curator",
+          });
+        }
+      });
+    },
+    [assets, addActivity],
+  );
+
+  const bulkRemoveTag = useCallback(
+    (assetIds: string[], tag: string) => {
+      const now = new Date().toISOString();
+      setAssets((prev) =>
+        prev.map((a) =>
+          assetIds.includes(a.id)
+            ? applyAIAndProduction(
+                { ...a, tags: a.tags.filter((t) => t !== tag), updatedAt: now },
+                collections,
+              )
+            : a,
+        ),
+      );
+    },
+    [],
+  );
+
+  const bulkMoveToCollection = useCallback(
+    (assetIds: string[], collectionId: string) => {
+      const now = new Date().toISOString();
+      const collection = collections.find((c) => c.id === collectionId);
+      setAssets((prev) =>
+        prev.map((a) =>
+          assetIds.includes(a.id)
+            ? applyAIAndProduction({ ...a, collectionId, updatedAt: now }, collections)
+            : a,
+        ),
+      );
+      assetIds.forEach((id) => {
+        const asset = assets.find((a) => a.id === id);
+        if (asset && collection) {
+          addActivity({
+            assetId: id,
+            assetName: asset.name,
+            action: `Moved to collection: ${collection.name}`,
+            timestamp: now,
+            source: "curator",
+          });
+        }
+      });
+    },
+    [assets, addActivity],
+  );
+
   const submitReview = useCallback(
     (assetId: string, payload: SubmitReviewPayload): { ok: boolean; error?: string } => {
       const { action, notes, checklist } = payload;
@@ -624,8 +904,10 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       productionReady: assets.filter((a) => a.status === "PRODUCTION_READY").length,
       rejected: assets.filter((a) => a.status === "REJECTED").length,
       changeRequests: assets.filter((a) => a.status === "CHANGES_REQUESTED").length,
+      metadataIssues: getAssetsWithMetadataIssues(assets, collections),
+      possibleDuplicates: countPossibleDuplicates(assets, ignoredDuplicates),
     }),
-    [assets],
+    [assets, ignoredDuplicates],
   );
 
   const value = useMemo(
@@ -649,6 +931,17 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       dismissObservation,
       acceptObservation,
       getAssetFeedback,
+      uploadAsset,
+      updateAssetMetadata,
+      createAssetVersion,
+      ignoreDuplicate,
+      getDuplicateCandidates,
+      getRelatedAssets,
+      getAssetHealth,
+      getAssetTimeline,
+      bulkAddTag,
+      bulkRemoveTag,
+      bulkMoveToCollection,
       stats,
       aiStats,
       getAllDecisionHistory,
@@ -672,6 +965,17 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       dismissObservation,
       acceptObservation,
       getAssetFeedback,
+      uploadAsset,
+      updateAssetMetadata,
+      createAssetVersion,
+      ignoreDuplicate,
+      getDuplicateCandidates,
+      getRelatedAssets,
+      getAssetHealth,
+      getAssetTimeline,
+      bulkAddTag,
+      bulkRemoveTag,
+      bulkMoveToCollection,
       stats,
       aiStats,
       getAllDecisionHistory,

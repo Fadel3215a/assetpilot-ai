@@ -29,6 +29,12 @@ const icons: Record<AssetType, ReactNode> = {
       <path d="M2 12l10 5 10-5" />
     </svg>
   ),
+  other: (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.5">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  ),
 };
 
 export function AssetTypeIcon({ type }: { type: AssetType }) {
@@ -45,6 +51,7 @@ export function assetTypeIconLabel(type: AssetType): string {
     video: "Video asset",
     audio: "Audio asset",
     "3d": "3D asset",
+    other: "Other file asset",
   };
   return labels[type];
 }

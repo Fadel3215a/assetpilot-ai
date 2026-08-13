@@ -19,16 +19,23 @@ export function AssetThumbnail({
   className = "",
   sizes = "(max-width: 768px) 100vw, 300px",
 }: AssetThumbnailProps) {
+  const isBlob = src.startsWith("blob:");
+
   return (
     <div className={`relative overflow-hidden bg-zinc-100 dark:bg-zinc-800 ${className}`}>
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        className="object-cover"
-        sizes={sizes}
-        priority={priority}
-      />
+      {isBlob ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} className="h-full w-full object-cover" loading={priority ? "eager" : "lazy"} />
+      ) : (
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          className="object-cover"
+          sizes={sizes}
+          priority={priority}
+        />
+      )}
       <div className="absolute bottom-2 right-2 rounded-md bg-black/50 p-1.5 text-white backdrop-blur-sm">
         <AssetTypeIcon type={type} />
       </div>

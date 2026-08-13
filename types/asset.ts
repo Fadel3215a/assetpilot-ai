@@ -1,6 +1,7 @@
 import type { AIAnalysis } from "./ai";
+import type { ExtractedFileMetadata } from "./media";
 
-export type AssetType = "image" | "video" | "audio" | "3d";
+export type AssetType = "image" | "video" | "audio" | "3d" | "other";
 
 export type AssetStatus =
   | "DRAFT"
@@ -35,6 +36,8 @@ export interface AssetMetadata {
   duration?: number;
   format: string;
   fileSize: number;
+  fileName?: string;
+  mimeType?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +111,7 @@ export interface AssetVersion {
   label: string;
   thumbnailPath: string;
   previewPath: string;
+  mediaUrl?: string;
   metadata: AssetMetadata;
   qualityScore: QualityScore;
   reviewDecision: ReviewDecision;
@@ -138,6 +142,9 @@ export interface Asset {
   productionReadiness: ProductionReadiness;
   decisionHistory: DecisionHistoryEntry[];
   aiAnalysis: AIAnalysis;
+  usageNotes?: string;
+  extractedMetadata?: ExtractedFileMetadata;
+  isSessionUpload?: boolean;
   createdAt: string;
   updatedAt: string;
 }

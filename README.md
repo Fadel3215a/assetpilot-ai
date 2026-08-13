@@ -10,6 +10,7 @@ AssetPilot AI explores a **human-in-the-loop approach to AI-assisted digital ass
 - **Final decisions remain with the human curator** — AI suggests, humans decide
 - **No production client data** is used — all assets and collections are fictional
 - **Confidence levels are demo labels** — not calibrated model probabilities
+- **Uploaded files are session-only** — not stored on a server; refresh may clear them
 
 ## Workflow
 
@@ -71,6 +72,29 @@ public/        # Static assets and thumbnails
 - AI comparison and production readiness summaries
 - Curator Feedback history (not model training)
 - Dashboard AI assistance metrics
+
+### Phase 4 — Asset Intelligence & Media Management
+- **Session-only asset ingestion** via browser File API (no server upload, no persistent storage)
+- **Real media previews** for uploaded images, video, and audio; placeholders for 3D and other files
+- **Extracted metadata** panel (filename, size, MIME type, dimensions, duration) — clearly separate from AI suggestions
+- **Metadata editor** for name, description, tags, collection, and usage notes
+- **Extended search and filtering** across name, description, tags, collection, type, status, priority, quality, and production readiness
+- **Metadata-based duplicate detection** with Review / Ignore actions (not visual or AI similarity)
+- **Related asset discovery** from collection, tags, type, and description keywords
+- **Version management** — create versions, view history, compare via existing comparison flow
+- **Activity timeline** on asset detail with AI vs curator vs system labels
+- **Bulk operations** — add/remove tags, move to collection (with confirmation)
+- **Asset health** summary from live session criteria
+- **AI provider boundary** (`AIAnalysisProvider` / `MockAIAnalysisProvider`) for future real model integration
+
+## Phase 4 limitations
+
+- Uploads are **session-only** — refreshing the page may remove uploaded assets
+- **No production storage**, authentication, database, or external API calls
+- **No real client assets** — seeded demo assets remain; uploads are local to your browser
+- **AI remains simulated** — deterministic mock analysis, not connected to a real model
+- **Duplicate detection is metadata-based** — not perceptual or visual similarity
+- **Related asset discovery is metadata-based** — not AI unless using existing AI suggestion layers
 
 ## Demo Data
 

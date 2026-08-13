@@ -53,6 +53,7 @@ export function assetTypeLabel(type: Asset["type"]): string {
     video: "Video",
     audio: "Audio",
     "3d": "3D Model",
+    other: "Other",
   };
   return labels[type];
 }

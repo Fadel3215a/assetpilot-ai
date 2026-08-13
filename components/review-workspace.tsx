@@ -14,7 +14,7 @@ import {
   getCurrentVersion,
   statusLabel,
 } from "@/lib/utils";
-import { AssetThumbnail } from "./asset-thumbnail";
+import { AssetMediaPreview } from "./asset-media-preview";
 import { AIInsightPanel } from "./ai-insight-panel";
 import { CuratorScoreDisplay } from "./curator-score-display";
 import { DecisionHistoryPanel } from "./decision-history-panel";
@@ -92,14 +92,7 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           <Card className="overflow-hidden">
-            <AssetThumbnail
-              src={version.previewPath}
-              alt={`Preview of ${asset.name}`}
-              type={asset.type}
-              className="aspect-video w-full"
-              priority
-              sizes="(max-width: 1280px) 100vw, 66vw"
-            />
+            <AssetMediaPreview asset={asset} className="aspect-video w-full" priority />
             <CardContent>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={asset.status} />
