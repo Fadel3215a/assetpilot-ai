@@ -27,7 +27,6 @@ import { StatusBadge } from "./status-badge";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { SourceBadge } from "./ui/source-badge";
-import { Card, CardContent, CardHeader } from "./ui/card";
 
 export function AssetDetailView({ assetId }: { assetId: string }) {
   const { getAsset, collections, assets } = useAssets();
@@ -42,7 +41,7 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
   const comparePartnerId = findComparisonPartner(assets, asset.id);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-2">
         <Link href={`/curation/${asset.id}`}>
           <Button type="button">Review</Button>
@@ -67,122 +66,120 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
       </div>
 
       {asset.isSessionUpload && (
-        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="rounded-md border border-status-warning/30 bg-status-warning-muted px-4 py-2 text-sm text-status-warning">
           Session-only upload — this asset exists only in your current browser session. Refreshing
           the page may remove it.
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <Card className="overflow-hidden">
-            <AssetMediaPreview asset={asset} priority />
-            <CardContent>
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={asset.status} />
-                {asset.isAiGenerated && (
-                  <SourceBadge source="ai" />
-                )}
-                <span className="text-sm text-muted">
-                  {assetTypeLabel(asset.type)} · v{version.versionNumber}
+      <section>
+        <div className="hero-preview visual-hover rounded-md border border-border">
+          <AssetMediaPreview
+            asset={asset}
+            className="aspect-video w-full lg:min-h-[20rem]"
+            priority
+          />
+        </div>
+        <div className="mt-6">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <StatusBadge status={asset.status} />
+            {asset.isAiGenerated && <SourceBadge source="ai" />}
+            <span className="text-muted">{assetTypeLabel(asset.type)}</span>
+            {collection && (
+              <>
+                <span className="text-border" aria-hidden="true">
+                  ·
                 </span>
+                <Badge color={collection.color}>{collection.name}</Badge>
+              </>
+            )}
+            <span className="text-border" aria-hidden="true">
+              ·
+            </span>
+            <span className="text-muted">v{version.versionNumber}</span>
+          </div>
+          <h1 className="display-title mt-3">{asset.name}</h1>
+          <p className="editorial-lead mt-3">{version.metadata.description}</p>
+        </div>
+      </section>
+
+      <section className="editorial-section grid gap-8 lg:grid-cols-3">
+        <AssetHealthPanel assetId={asset.id} />
+
+        <div>
+          <p className="section-label">Review Score</p>
+          <p className="mt-1 text-xs text-muted">Curator evaluation — not AI confidence</p>
+          <div className="mt-4">
+            {version.curatorScore !== undefined ? (
+              <div>
+                <p className="text-4xl font-semibold tracking-tight text-foreground">
+                  {version.curatorScore}
+                </p>
+                <p className="mt-1 text-xs text-muted">Curator Quality Score / 100</p>
               </div>
-              <h2 className="mt-3 text-xl font-semibold text-foreground">
-                {asset.name}
-              </h2>
-              <p className="mt-2 text-sm text-muted">
-                {version.metadata.description}
-              </p>
-            </CardContent>
-          </Card>
+            ) : (
+              <QualityScoreDisplay score={version.qualityScore} />
+            )}
+          </div>
         </div>
 
-        <div className="space-y-6 lg:col-span-2">
-          <AssetHealthPanel assetId={asset.id} />
-
-          <Card>
-            <CardHeader>
-              <h3 className="text-sm font-semibold">Review Score</h3>
-              <p className="text-xs text-muted">Curator evaluation — not AI confidence</p>
-            </CardHeader>
-            <CardContent>
-              {version.curatorScore !== undefined ? (
-                <div>
-                  <p className="text-3xl font-bold text-foreground">{version.curatorScore}</p>
-                  <p className="text-xs text-muted">Curator Quality Score / 100</p>
-                </div>
-              ) : (
-                <QualityScoreDisplay score={version.qualityScore} />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h3 className="text-sm font-semibold">Curator Review</h3>
-            </CardHeader>
-            <CardContent>
-              <ReviewActions
-                assetId={asset.id}
-                currentDecision={version.reviewDecision.type}
-              />
-            </CardContent>
-          </Card>
+        <div>
+          <p className="section-label">Curator Review</p>
+          <div className="mt-4">
+            <ReviewActions
+              assetId={asset.id}
+              currentDecision={version.reviewDecision.type}
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <section className="editorial-section grid gap-8 lg:grid-cols-2">
         <ExtractedMetadataPanel asset={asset} />
 
-        <Card>
-          <CardHeader>
-            <h3 className="text-sm font-semibold">Asset Metadata</h3>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-3 text-sm">
+        <div>
+          <h3 className="section-title">Asset Metadata</h3>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="meta-label">Title</dt>
+              <dd className="text-right font-medium">{version.metadata.title}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="meta-label">Format</dt>
+              <dd className="font-medium">{version.metadata.format}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="meta-label">File size</dt>
+              <dd className="font-medium">{formatFileSize(version.metadata.fileSize)}</dd>
+            </div>
+            {version.metadata.dimensions && (
               <div className="flex justify-between gap-4">
-                <dt className="meta-label">Title</dt>
-                <dd className="text-right font-medium">{version.metadata.title}</dd>
+                <dt className="meta-label">Dimensions</dt>
+                <dd className="font-medium">
+                  {version.metadata.dimensions.width} × {version.metadata.dimensions.height}
+                </dd>
               </div>
+            )}
+            {version.metadata.duration !== undefined && (
               <div className="flex justify-between gap-4">
-                <dt className="meta-label">Format</dt>
-                <dd className="font-medium">{version.metadata.format}</dd>
+                <dt className="meta-label">Duration</dt>
+                <dd className="font-medium">{version.metadata.duration}s</dd>
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="meta-label">File size</dt>
-                <dd className="font-medium">{formatFileSize(version.metadata.fileSize)}</dd>
-              </div>
-              {version.metadata.dimensions && (
-                <div className="flex justify-between gap-4">
-                  <dt className="meta-label">Dimensions</dt>
-                  <dd className="font-medium">
-                    {version.metadata.dimensions.width} × {version.metadata.dimensions.height}
-                  </dd>
-                </div>
-              )}
-              {version.metadata.duration !== undefined && (
-                <div className="flex justify-between gap-4">
-                  <dt className="meta-label">Duration</dt>
-                  <dd className="font-medium">{version.metadata.duration}s</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-4">
-                <dt className="meta-label">Created</dt>
-                <dd className="font-medium">{formatDate(version.metadata.createdAt)}</dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
+            )}
+            <div className="flex justify-between gap-4">
+              <dt className="meta-label">Created</dt>
+              <dd className="font-medium">{formatDate(version.metadata.createdAt)}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
       <MetadataEditor asset={asset} collections={collections} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <h3 className="text-sm font-semibold">Organization</h3>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <section className="editorial-section grid gap-8 lg:grid-cols-2">
+        <div>
+          <h3 className="section-title">Organization</h3>
+          <div className="mt-4 space-y-4">
             {collection && (
               <div>
                 <p className="text-xs text-muted">Collection</p>
@@ -195,10 +192,7 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               <p className="text-xs text-muted">Tags</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {asset.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="tag-muted"
-                  >
+                  <span key={tag} className="tag-muted">
                     {tag}
                   </span>
                 ))}
@@ -208,11 +202,11 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
               <p className="text-xs text-muted">Status</p>
               <p className="mt-1 text-sm font-medium">{statusLabel(asset.status)}</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         <RelatedAssetsPanel assetId={asset.id} />
-      </div>
+      </section>
 
       <DuplicateDetectionPanel assetId={asset.id} />
 

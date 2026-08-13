@@ -16,7 +16,8 @@ export function AssetLibraryPage() {
   return (
     <AppShell
       title="Asset Library"
-      description="Browse, upload session-only assets, search, filter, and inspect your library."
+      description="Browse, upload, and curate your creative assets — visual-first library for this session."
+      headerSize="display"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
         { label: "Asset Library" },

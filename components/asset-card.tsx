@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { Asset, Collection } from "@/types";
+import type { VisualGridVariant } from "@/lib/visual-grid";
 import { useAssets } from "@/lib/assets-context";
 import { assetTypeLabel, getCurrentVersion } from "@/lib/utils";
 import { AssetThumbnail } from "./asset-thumbnail";
 import { StatusBadge } from "./status-badge";
-import { Badge } from "./ui/badge";
 
 interface AssetCardProps {
   asset: Asset;
@@ -14,7 +14,14 @@ interface AssetCardProps {
   bulkMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  variant?: VisualGridVariant;
 }
+
+const thumbnailAspect: Record<VisualGridVariant, string> = {
+  featured: "aspect-[4/3] w-full sm:aspect-[16/10] lg:min-h-[18rem]",
+  wide: "aspect-[21/9] w-full",
+  standard: "aspect-[4/3] w-full",
+};
 
 export function AssetCard({
   asset,
@@ -22,29 +29,31 @@ export function AssetCard({
   bulkMode = false,
   selected = false,
   onToggleSelect,
+  variant = "standard",
 }: AssetCardProps) {
   const { getAssetHealth } = useAssets();
   const version = getCurrentVersion(asset);
   const health = getAssetHealth(asset.id);
   const qualityScore = version.curatorScore ?? version.qualityScore.overall;
-  const healthSummary =
-    health && health.completeCount < health.totalCount
-      ? `${health.completeCount}/${health.totalCount} health criteria met`
-      : health
-        ? "Health complete"
-        : null;
+  const isFeatured = variant === "featured";
 
   const inner = (
     <>
-      <AssetThumbnail
-        src={version.thumbnailPath}
-        alt={`Thumbnail for ${asset.name}`}
-        type={asset.type}
-        className="aspect-[4/3] w-full border-b border-border"
-      />
-      <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+      <div className="visual-hover">
+        <AssetThumbnail
+          src={version.thumbnailPath}
+          alt={`Thumbnail for ${asset.name}`}
+          type={asset.type}
+          className={`${thumbnailAspect[variant]} border-b border-border`}
+        />
+      </div>
+      <div className={`flex flex-1 flex-col gap-2 ${isFeatured ? "p-4" : "p-3"}`}>
         <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-accent">
+          <h3
+            className={`line-clamp-2 font-semibold text-foreground group-hover:text-accent ${
+              isFeatured ? "text-base sm:text-lg" : "text-sm"
+            }`}
+          >
             {asset.name}
           </h3>
           <StatusBadge status={asset.status} />
@@ -57,38 +66,29 @@ export function AssetCard({
           {collection && (
             <>
               <span className="text-border" aria-hidden="true">·</span>
-              <Badge color={collection.color} className="text-[10px]">{collection.name}</Badge>
-            </>
-          )}
-          {asset.isSessionUpload && (
-            <>
-              <span className="text-border" aria-hidden="true">·</span>
-              <span className="text-status-warning">Session</span>
+              <span className="text-muted">{collection.name}</span>
             </>
           )}
         </div>
 
-        {asset.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {asset.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="tag-muted">
-                {tag}
-              </span>
+        {!isFeatured && asset.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 opacity-80 transition-opacity group-hover:opacity-100">
+            {asset.tags.slice(0, 2).map((tag) => (
+              <span key={tag} className="tag-muted">{tag}</span>
             ))}
-            {asset.tags.length > 3 && (
-              <span className="text-[11px] text-muted">+{asset.tags.length - 3}</span>
-            )}
           </div>
         )}
 
-        {healthSummary && (
-          <p className="text-[11px] text-muted">{healthSummary}</p>
+        {health && health.completeCount < health.totalCount && isFeatured && (
+          <p className="text-[11px] text-muted">
+            {health.completeCount}/{health.totalCount} health criteria met
+          </p>
         )}
       </div>
     </>
   );
 
-  const cardClasses = `group flex flex-col overflow-hidden rounded-md border bg-surface transition-colors ${
+  const cardClasses = `group flex h-full flex-col overflow-hidden rounded-md border bg-surface transition-colors ${
     selected
       ? "border-accent ring-1 ring-accent/30"
       : "border-border hover:border-accent/30"

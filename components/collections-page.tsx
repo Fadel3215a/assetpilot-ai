@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
-import { isQueueAsset } from "@/lib/production";
+import { getCurrentVersion } from "@/lib/utils";
 import { AppShell } from "./app-shell";
-import { Card, CardContent } from "./ui/card";
+import { AssetThumbnail } from "./asset-thumbnail";
 
 export function CollectionsPage() {
   const { collections, assets } = useAssets();
@@ -12,52 +12,66 @@ export function CollectionsPage() {
   return (
     <AppShell
       title="Collections"
-      description="Fictional project collections organizing demo assets by campaign and workflow stage."
+      description="Visual libraries organizing creative assets by campaign and production stage."
+      headerSize="display"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
         { label: "Collections" },
       ]}
     >
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
         {collections.map((col) => {
           const colAssets = assets.filter((a) => a.collectionId === col.id);
-          const approved = colAssets.filter((a) => a.status === "APPROVED").length;
-          const pending = colAssets.filter((a) => isQueueAsset(a.status)).length;
-          const productionReady = colAssets.filter((a) => a.status === "PRODUCTION_READY").length;
+          const previewAssets = colAssets.slice(0, 4);
 
           return (
-            <Link key={col.id} href={`/collections/${col.id}`}>
-              <Card className="h-full transition-shadow hover:shadow-md">
-                <CardContent className="pt-5">
-                  <div
-                    className="mb-3 h-1 w-12 rounded-full"
-                    style={{ backgroundColor: col.color }}
-                  />
-                  <h3 className="font-semibold text-foreground">{col.name}</h3>
-                  <p className="mt-1 line-clamp-2 text-sm text-muted">
-                    {col.description}
-                  </p>
-                  <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <dt className="text-muted">Assets</dt>
-                      <dd className="font-semibold text-foreground">{colAssets.length}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Approved</dt>
-                      <dd className="font-semibold text-status-success">{approved}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Pending review</dt>
-                      <dd className="font-semibold text-status-warning">{pending}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Production ready</dt>
-                      <dd className="font-semibold text-accent">{productionReady}</dd>
-                    </div>
-                  </dl>
-                </CardContent>
-              </Card>
-            </Link>
+            <article key={col.id} className="group flex flex-col">
+              <Link href={`/collections/${col.id}`} className="block">
+                <div className="collection-collage">
+                  {Array.from({ length: 4 }, (_, i) => {
+                    const asset = previewAssets[i];
+                    if (asset) {
+                      const version = getCurrentVersion(asset);
+                      return (
+                        <div key={asset.id} className="collection-collage-cell visual-hover">
+                          <AssetThumbnail
+                            src={version.thumbnailPath}
+                            alt={`Thumbnail for ${asset.name}`}
+                            type={asset.type}
+                            className="h-full w-full"
+                          />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div
+                        key={`empty-${col.id}-${i}`}
+                        className="collection-collage-cell bg-surface-elevated"
+                        aria-hidden="true"
+                      />
+                    );
+                  })}
+                </div>
+              </Link>
+
+              <div className="mt-4">
+                <div
+                  className="mb-2 h-1 w-12 rounded-full"
+                  style={{ backgroundColor: col.color }}
+                />
+                <h3 className="font-semibold text-foreground">{col.name}</h3>
+                <p className="mt-1 line-clamp-2 text-sm text-muted">{col.description}</p>
+                <p className="mt-2 text-sm text-muted">
+                  {colAssets.length} asset{colAssets.length !== 1 ? "s" : ""}
+                </p>
+                <Link
+                  href={`/collections/${col.id}`}
+                  className="link-subtle mt-3 inline-block font-medium"
+                >
+                  Open Collection →
+                </Link>
+              </div>
+            </article>
           );
         })}
       </div>

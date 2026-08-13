@@ -74,7 +74,7 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const nav = (
-    <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-3">
+    <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 px-3 py-2">
       {navItems.map(({ href, label, icon: Icon }) => {
         const active =
           href === "/"
@@ -86,16 +86,16 @@ export function Sidebar() {
             key={href}
             href={href}
             onClick={() => setMobileOpen(false)}
-            className={`relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 motion-reduce:transition-none ${
+            className={`relative flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm transition-colors duration-150 motion-reduce:transition-none ${
               active
-                ? "bg-surface-elevated text-foreground"
-                : "text-muted hover:bg-surface-elevated hover:text-foreground"
+                ? "font-medium text-foreground"
+                : "text-muted hover:text-foreground"
             }`}
             aria-current={active ? "page" : undefined}
           >
             {active && (
               <span
-                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent"
+                className="absolute left-0 top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-accent"
                 aria-hidden="true"
               />
             )}
@@ -141,17 +141,17 @@ export function Sidebar() {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-xs font-bold text-accent-foreground">
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent text-[10px] font-bold text-accent-foreground">
             AP
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">AssetPilot AI</p>
-            <p className="text-[11px] text-muted">Curation workspace</p>
+            <p className="text-sm font-semibold tracking-tight text-foreground">AssetPilot</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted">Creative workspace</p>
           </div>
         </div>
         {nav}
-        <div className="mt-auto space-y-2 border-t border-border p-3">
+        <div className="mt-auto space-y-2 border-t border-border px-4 py-4">
           <DemoResetButton />
           <p className="text-[11px] leading-relaxed text-muted">
             Portfolio demo — simulated AI, session-only state.

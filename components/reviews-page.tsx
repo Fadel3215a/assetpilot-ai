@@ -8,7 +8,6 @@ import { AIFeedbackHistory } from "./ai-feedback-history";
 import { DecisionHistoryPanel } from "./decision-history-panel";
 import { EmptyState } from "./empty-state";
 import { SourceBadge } from "./ui/source-badge";
-import { Card, CardContent, CardHeader } from "./ui/card";
 
 export function ReviewsPage() {
   const { stats, getAllDecisionHistory, comparisons, activity, feedback } = useAssets();
@@ -18,34 +17,40 @@ export function ReviewsPage() {
   const rejections = history.filter((h) => h.decision === "REJECTED").length;
   const changeRequests = history.filter((h) => h.decision === "CHANGES_REQUESTED").length;
 
+  const statItems = [
+    { label: "Approvals", value: approvals, color: "text-status-success" },
+    { label: "Rejections", value: rejections, color: "text-status-danger" },
+    { label: "Request Changes", value: changeRequests, color: "text-status-warning" },
+    { label: "Comparisons", value: comparisons.length, color: "text-accent" },
+  ];
+
   return (
     <AppShell
       title="Reviews"
-      description="Operational history of curator decisions, comparisons, and AI suggestion feedback."
+      description="Editorial history of curator decisions, comparisons, and AI suggestion feedback."
+      headerSize="display"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
         { label: "Reviews" },
       ]}
     >
-      <div className="space-y-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Approvals", value: approvals, color: "text-status-success" },
-            { label: "Rejections", value: rejections, color: "text-status-danger" },
-            { label: "Request Changes", value: changeRequests, color: "text-status-warning" },
-            { label: "Comparisons", value: comparisons.length, color: "text-accent" },
-          ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="pt-5">
-                <p className="text-sm text-muted">{stat.label}</p>
-                <p className={`mt-1 text-3xl font-bold ${stat.color}`}>{stat.value}</p>
-                <p className="mt-1 text-xs text-muted">Current session</p>
-              </CardContent>
-            </Card>
+      <div className="space-y-10">
+        <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4 sm:divide-x sm:divide-border">
+          {statItems.map(({ label, value, color }, index) => (
+            <div
+              key={label}
+              className={`attention-stat px-0 ${
+                index === 0 ? "sm:pr-6" : index === statItems.length - 1 ? "sm:pl-6" : "sm:px-6"
+              }`}
+            >
+              <p className="section-label">{label}</p>
+              <p className={`attention-stat-value mt-2 ${color}`}>{value}</p>
+              <p className="mt-1 text-xs text-muted">Current session</p>
+            </div>
           ))}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-10 lg:grid-cols-2">
           {history.length === 0 ? (
             <EmptyState
               title="No curator decisions yet"
@@ -57,12 +62,10 @@ export function ReviewsPage() {
             <DecisionHistoryPanel history={history} limit={10} />
           )}
 
-          <Card>
-            <CardHeader>
-              <h3 className="text-sm font-semibold">Recent Activity</h3>
-              <p className="text-xs text-muted">AI and curator actions are labeled separately</p>
-            </CardHeader>
-            <CardContent>
+          <section>
+            <h3 className="section-title">Recent Activity</h3>
+            <p className="mt-0.5 text-xs text-muted">AI and curator actions are labeled separately</p>
+            <div className="mt-4">
               {activity.length === 0 ? (
                 <p className="text-sm text-muted">No activity recorded this session.</p>
               ) : (
@@ -86,11 +89,13 @@ export function ReviewsPage() {
                   ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
 
-        <AIFeedbackHistory feedback={feedback} />
+        <section className="editorial-section">
+          <AIFeedbackHistory feedback={feedback} />
+        </section>
 
         <p className="text-xs text-muted">
           Session summary: {stats.approved} approved · {stats.rejected} rejected · {stats.needsChanges} need changes

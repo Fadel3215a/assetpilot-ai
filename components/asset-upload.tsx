@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
 import { validateUploadFile } from "@/lib/upload-validation";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader } from "./ui/card";
 import { Select } from "./ui/select";
 
 type UploadStatus = "idle" | "processing" | "ready" | "error";
+
+const typeLabels = ["Images", "Video", "Audio", "3D", "Other"] as const;
 
 export function AssetUpload() {
   const { uploadAsset, collections } = useAssets();
@@ -65,108 +66,132 @@ export function AssetUpload() {
 
   const isProcessing = status === "processing";
 
+  function openFilePicker() {
+    if (!isProcessing) {
+      inputRef.current?.click();
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <h3 className="text-sm font-semibold">Upload Assets</h3>
-        <p className="text-xs text-muted">
+    <section className="space-y-6">
+      <div>
+        <h3 className="section-title">Upload Assets</h3>
+        <p className="mt-1 text-xs text-muted">
           Files are processed locally and stored only for this session. Refreshing the page may
           remove uploaded assets.
         </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div
-          className="rounded-md border border-border bg-surface px-3 py-2 text-xs"
-          role="status"
-          aria-live="polite"
-        >
-          Status:{" "}
-          <span className="font-medium text-foreground">
-            {status === "idle" && "Ready to upload"}
-            {status === "processing" && "Processing file and extracting metadata…"}
-            {status === "ready" && "Upload complete"}
-            {status === "error" && "Upload failed"}
-          </span>
+      </div>
+
+      <div
+        className="rounded-md border border-border bg-surface px-3 py-2 text-xs"
+        role="status"
+        aria-live="polite"
+      >
+        Status:{" "}
+        <span className="font-medium text-foreground">
+          {status === "idle" && "Ready to upload"}
+          {status === "processing" && "Processing file and extracting metadata…"}
+          {status === "ready" && "Upload complete"}
+          {status === "error" && "Upload failed"}
+        </span>
+      </div>
+
+      <input
+        ref={inputRef}
+        id="asset-upload-input"
+        type="file"
+        multiple
+        accept="image/*,video/*,audio/*,.glb,.gltf,.obj,.fbx,.usdz,*/*"
+        disabled={isProcessing}
+        onChange={(e) => handleFiles(e.target.files)}
+        className="sr-only"
+      />
+
+      <div
+        className={`upload-dropzone ${isProcessing ? "pointer-events-none opacity-60" : ""}`}
+        role="button"
+        tabIndex={isProcessing ? -1 : 0}
+        aria-label="Upload files by clicking or dropping"
+        onClick={openFilePicker}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openFilePicker();
+          }
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleFiles(e.dataTransfer.files);
+        }}
+      >
+        <div className="flex flex-wrap justify-center gap-2">
+          {typeLabels.map((label) => (
+            <span key={label} className="tag-muted">
+              {label}
+            </span>
+          ))}
         </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label htmlFor="asset-upload-input" className="mb-1 block text-xs font-medium text-muted">
-              Select files (image, video, audio, 3D, or other)
-            </label>
-            <input
-              ref={inputRef}
-              id="asset-upload-input"
-              type="file"
-              multiple
-              accept="image/*,video/*,audio/*,.glb,.gltf,.obj,.fbx,.usdz,*/*"
-              disabled={isProcessing}
-              onChange={(e) => handleFiles(e.target.files)}
-              className="sr-only"
-            />
-          </div>
-          <div className="sm:w-48">
-            <label htmlFor="upload-collection" className="mb-1 block text-xs font-medium text-muted">
-              Default collection
-            </label>
-            <Select
-              id="upload-collection"
-              value={collectionId}
-              disabled={isProcessing}
-              onChange={(e) => setCollectionId(e.target.value)}
-            >
-              {collections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            disabled={isProcessing}
-            onClick={() => inputRef.current?.click()}
-          >
-            {isProcessing ? "Processing…" : "Choose files"}
-          </Button>
-          <p className="text-xs text-muted">
-            Category detected from file type and extension.
-          </p>
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-            {error}
-          </p>
-        )}
-        {successMessage && (
-          <div className="space-y-2" role="status">
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">{successMessage}</p>
-            {lastUploadedId && (
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/assets/${lastUploadedId}`}>
-                  <Button type="button" variant="secondary" className="text-xs">
-                    View asset & metadata
-                  </Button>
-                </Link>
-                <Link href={`/curation/${lastUploadedId}`}>
-                  <Button type="button" className="text-xs">
-                    Open review workspace
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
-
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          Nothing is sent to a server. Very large files may be slow to preview depending on your
-          browser.
+        <p className="mt-4 text-sm font-medium text-foreground">
+          {isProcessing ? "Processing…" : "Drop files here or click to browse"}
         </p>
-      </CardContent>
-    </Card>
+        <p className="mt-1 text-xs text-muted">
+          Category detected from file type and extension.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="sm:w-48">
+          <label htmlFor="upload-collection" className="mb-1 block text-xs font-medium text-muted">
+            Default collection
+          </label>
+          <Select
+            id="upload-collection"
+            value={collectionId}
+            disabled={isProcessing}
+            onChange={(e) => setCollectionId(e.target.value)}
+          >
+            {collections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="button" disabled={isProcessing} onClick={openFilePicker}>
+          {isProcessing ? "Processing…" : "Choose files"}
+        </Button>
+      </div>
+
+      {error && (
+        <p className="text-sm text-status-danger" role="alert">
+          {error}
+        </p>
+      )}
+      {successMessage && (
+        <div className="space-y-2" role="status">
+          <p className="text-sm text-status-success">{successMessage}</p>
+          {lastUploadedId && (
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/assets/${lastUploadedId}`}>
+                <Button type="button" variant="secondary" className="text-xs">
+                  View asset & metadata
+                </Button>
+              </Link>
+              <Link href={`/curation/${lastUploadedId}`}>
+                <Button type="button" className="text-xs">
+                  Open review workspace
+                </Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="rounded-md border border-status-warning/30 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
+        Nothing is sent to a server. Very large files may be slow to preview depending on your
+        browser.
+      </p>
+    </section>
   );
 }

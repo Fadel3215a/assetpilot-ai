@@ -27,30 +27,36 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
   return (
     <Link
       href={`/curation/${asset.id}`}
-      className="flex flex-col gap-4 rounded-md border border-border bg-surface p-4 transition-colors hover:border-accent/30 sm:flex-row sm:items-center"
+      className="group flex flex-col overflow-hidden rounded-md border border-border bg-surface transition-colors hover:border-accent/30"
     >
-      <AssetThumbnail
-        src={version.thumbnailPath}
-        alt={`Thumbnail for ${asset.name}`}
-        type={asset.type}
-        className="h-24 w-full shrink-0 rounded-sm border border-border sm:h-20 sm:w-28"
-      />
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="visual-hover">
+        <AssetThumbnail
+          src={version.thumbnailPath}
+          alt={`Preview for ${asset.name}`}
+          type={asset.type}
+          className="aspect-[16/10] w-full border-b border-border sm:aspect-[21/9]"
+        />
+      </div>
+
+      <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-foreground">{asset.name}</h3>
-            <p className="text-xs text-muted">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-foreground group-hover:text-accent">
+              {asset.name}
+            </h3>
+            <p className="mt-0.5 text-xs text-muted">
               {assetTypeLabel(asset.type)} · v{version.versionNumber}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <span className={`rounded-sm border px-2 py-0.5 text-[11px] font-medium ${priorityStyles[asset.priority]}`}>
-              {priorityLabel(asset.priority)} priority
-            </span>
-            <StatusBadge status={asset.status} />
-          </div>
+          <StatusBadge status={asset.status} />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`rounded-sm border px-2 py-0.5 text-[11px] font-medium ${priorityStyles[asset.priority]}`}
+          >
+            {priorityLabel(asset.priority)} priority
+          </span>
           <QualityScoreDisplay score={version.qualityScore} compact />
           {collection && <Badge color={collection.color}>{collection.name}</Badge>}
           {metadataMissing && (
@@ -59,10 +65,11 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
             </span>
           )}
         </div>
+
+        <span className="inline-block text-sm font-medium text-accent">
+          Review →
+        </span>
       </div>
-      <span className="hidden shrink-0 text-sm font-medium text-accent sm:block">
-        Review →
-      </span>
     </Link>
   );
 }

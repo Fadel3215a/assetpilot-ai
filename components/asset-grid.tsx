@@ -10,6 +10,7 @@ import { AssetFilters } from "./asset-filters";
 import { AssetUpload } from "./asset-upload";
 import { BulkActionsBar } from "./bulk-actions-bar";
 import { EmptyState } from "./empty-state";
+import { getVisualGridClasses, getVisualGridVariant } from "@/lib/visual-grid";
 
 export function AssetGrid() {
   const { assets, collections, getDuplicateCandidates } = useAssets();
@@ -103,17 +104,22 @@ export function AssetGrid() {
           onAction={() => setFilters(defaultAssetFilters)}
         />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((asset) => (
-            <AssetCard
-              key={asset.id}
-              asset={asset}
-              collection={collectionMap.get(asset.collectionId)}
-              bulkMode={bulkMode}
-              selected={selectedIds.includes(asset.id)}
-              onToggleSelect={() => toggleSelect(asset.id)}
-            />
-          ))}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+          {filtered.map((asset, index) => {
+            const variant = getVisualGridVariant(index);
+            return (
+              <div key={asset.id} className={getVisualGridClasses(variant)}>
+                <AssetCard
+                  asset={asset}
+                  collection={collectionMap.get(asset.collectionId)}
+                  bulkMode={bulkMode}
+                  selected={selectedIds.includes(asset.id)}
+                  onToggleSelect={() => toggleSelect(asset.id)}
+                  variant={variant}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

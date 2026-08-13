@@ -121,4 +121,76 @@ body {
   .stat-secondary {
     @apply text-2xl font-semibold tracking-tight text-foreground/90;
   }
+
+  .display-title {
+    @apply text-3xl font-semibold tracking-tight text-foreground sm:text-4xl;
+  }
+
+  .display-subtitle {
+    @apply text-xs font-semibold uppercase tracking-[0.2em] text-accent;
+  }
+
+  .editorial-lead {
+    @apply max-w-2xl text-base leading-relaxed text-muted;
+  }
+
+  .editorial-section {
+    @apply border-t border-border pt-10;
+  }
+
+  .attention-stat {
+    @apply block border-b border-border py-6 transition-colors hover:border-accent/40;
+  }
+
+  .attention-stat-value {
+    @apply text-5xl font-semibold tracking-tight;
+  }
+
+  .visual-hover {
+    @apply overflow-hidden;
+  }
+
+  .visual-hover img,
+  .visual-hover video {
+    @apply transition-transform duration-300 motion-reduce:transition-none motion-reduce:transform-none;
+  }
+
+  .visual-hover:hover img,
+  .visual-hover:hover video,
+  .group:hover .visual-hover img,
+  .group:hover .visual-hover video {
+    @apply scale-[1.03];
+  }
+
+  .hero-preview {
+    @apply relative w-full overflow-hidden bg-surface;
+  }
+
+  .pipeline-track {
+    @apply flex flex-col gap-0 sm:flex-row sm:flex-wrap sm:items-stretch;
+  }
+
+  .pipeline-step {
+    @apply relative flex flex-1 flex-col gap-1 border border-border px-4 py-4 transition-colors hover:border-accent/30 sm:min-w-[8rem];
+  }
+
+  .pipeline-step-number {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-accent;
+  }
+
+  .upload-dropzone {
+    @apply flex min-h-[12rem] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center transition-colors hover:border-accent/40 hover:bg-surface-elevated;
+  }
+
+  .collection-collage {
+    @apply grid grid-cols-2 gap-0.5 overflow-hidden rounded-md border border-border;
+  }
+
+  .collection-collage-cell {
+    @apply aspect-square overflow-hidden bg-surface-elevated;
+  }
+
+  .compare-versus {
+    @apply flex items-center justify-center px-2 text-xs font-semibold uppercase tracking-widest text-muted;
+  }
 }

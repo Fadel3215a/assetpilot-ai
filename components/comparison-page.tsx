@@ -13,7 +13,6 @@ import { AIComparisonSummaryPanel } from "@/components/ai-comparison-summary";
 import { AssetThumbnail } from "@/components/asset-thumbnail";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import type { ComparisonDecisionType } from "@/types";
 
@@ -31,11 +30,9 @@ function ComparisonPanel({
 
   if (!asset) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted">
-          Asset not found
-        </CardContent>
-      </Card>
+      <div className="py-8 text-center text-sm text-muted">
+        Asset not found
+      </div>
     );
   }
 
@@ -43,22 +40,26 @@ function ComparisonPanel({
   const metaComplete = metadataCompleteness(version.metadata);
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader>
+    <article className="space-y-4">
+      <div>
         <p className="section-label">{label}</p>
-        <h3 className="text-sm font-semibold">{asset.name}</h3>
-      </CardHeader>
-      <AssetThumbnail
-        src={version.previewPath}
-        alt={asset.name}
-        type={asset.type}
-        className="aspect-video w-full"
-      />
-      <CardContent className="space-y-2 text-sm">
+        <h3 className="mt-1 text-lg font-semibold text-foreground">{asset.name}</h3>
+      </div>
+      <div className="hero-preview visual-hover rounded-md border border-border">
+        <AssetThumbnail
+          src={version.previewPath}
+          alt={asset.name}
+          type={asset.type}
+          className="aspect-video w-full lg:min-h-[16rem]"
+        />
+      </div>
+      <div className="space-y-2 text-sm">
         <p className="text-muted">{assetTypeLabel(asset.type)} · v{version.versionNumber}</p>
         <div className="flex items-center gap-2">
           <StatusBadge status={asset.status} />
-          <span className="text-muted">Score: {version.curatorScore ?? version.qualityScore.overall}</span>
+          <span className="text-muted">
+            Score: {version.curatorScore ?? version.qualityScore.overall}
+          </span>
         </div>
         <p className="text-muted">Metadata: {metaComplete}% complete</p>
         <div className="flex flex-wrap gap-1">
@@ -69,8 +70,8 @@ function ComparisonPanel({
         <Link href={`/curation/${asset.id}`} className="inline-block text-xs text-accent hover:underline">
           Open review workspace
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
@@ -166,22 +167,21 @@ export function ComparisonPage() {
   return (
     <AppShell
       title="Asset Comparison"
-      description="Compare two assets side by side. AI suggestions are labeled separately — the curator makes the final decision."
+      description="Art-direction review — compare two assets side by side. AI suggestions are labeled separately; the curator decides."
+      headerSize="display"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
         { label: "Compare Assets" },
       ]}
     >
-      <div className="space-y-6">
+      <div className="space-y-8">
         {assets.length < 2 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted">
-              At least two assets are needed to compare.{" "}
-              <Link href="/assets" className="text-accent hover:underline">
-                Return to Asset Library
-              </Link>
-            </CardContent>
-          </Card>
+          <div className="py-8 text-center text-sm text-muted">
+            At least two assets are needed to compare.{" "}
+            <Link href="/assets" className="text-accent hover:underline">
+              Return to Asset Library
+            </Link>
+          </div>
         ) : (
           <>
         <div className="flex flex-wrap gap-4">
@@ -236,55 +236,52 @@ export function ComparisonPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
           <ComparisonPanel assetId={assetAId} versionId={resolvedVersionAId} label="Option A" />
+          <div className="compare-versus hidden lg:flex lg:min-h-[16rem] lg:items-center">
+            versus
+          </div>
           <ComparisonPanel assetId={assetBId} versionId={resolvedVersionBId} label="Option B" />
         </div>
 
         {comparisonSummary && <AIComparisonSummaryPanel summary={comparisonSummary} />}
 
-        <Card className="panel-curator">
-          <CardHeader>
-            <h3 className="text-sm font-semibold">Curator Comparison Decision</h3>
+        <div className="panel-curator space-y-4 p-4">
+          <div>
+            <h3 className="section-title">Curator Comparison Decision</h3>
             <p className="text-xs text-muted">Human review required — explain your judgment before confirming</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <textarea
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Explain your comparison decision..."
-              className="field-textarea"
-              aria-label="Comparison reason"
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button variant="primary" onClick={() => handleDecision("PREFER_A")}>Prefer A</Button>
-              <Button variant="primary" onClick={() => handleDecision("PREFER_B")}>Prefer B</Button>
-              <Button variant="secondary" onClick={() => handleDecision("KEEP_BOTH")}>Keep Both</Button>
-              <Button variant="danger" onClick={() => handleDecision("REJECT_BOTH")}>Reject Both</Button>
-            </div>
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-            {success && <p className="text-sm text-emerald-600" role="status">{success}</p>}
-          </CardContent>
-        </Card>
+          </div>
+          <textarea
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Explain your comparison decision..."
+            className="field-textarea"
+            aria-label="Comparison reason"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={() => handleDecision("PREFER_A")}>Prefer A</Button>
+            <Button variant="primary" onClick={() => handleDecision("PREFER_B")}>Prefer B</Button>
+            <Button variant="secondary" onClick={() => handleDecision("KEEP_BOTH")}>Keep Both</Button>
+            <Button variant="danger" onClick={() => handleDecision("REJECT_BOTH")}>Reject Both</Button>
+          </div>
+          {error && <p className="text-sm text-status-danger" role="alert">{error}</p>}
+          {success && <p className="text-sm text-status-success" role="status">{success}</p>}
+        </div>
 
         {comparisons.length > 0 && (
-          <Card>
-            <CardHeader>
-              <h3 className="text-sm font-semibold">Recent Comparisons</h3>
-            </CardHeader>
-            <CardContent>
-              <ul className="divide-y divide-border">
-                {comparisons.slice(0, 5).map((c) => (
-                  <li key={c.id} className="py-3 first:pt-0">
-                    <p className="text-sm font-medium">{comparisonDecisionLabel(c.decision)}</p>
-                    <p className="text-xs text-muted">{c.itemA.label} vs {c.itemB.label}</p>
-                    <p className="mt-1 text-sm text-muted">{c.reason}</p>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          <section className="editorial-section">
+            <h3 className="section-title">Recent Comparisons</h3>
+            <ul className="mt-4 divide-y divide-border">
+              {comparisons.slice(0, 5).map((c) => (
+                <li key={c.id} className="py-3 first:pt-0">
+                  <p className="text-sm font-medium">{comparisonDecisionLabel(c.decision)}</p>
+                  <p className="text-xs text-muted">{c.itemA.label} vs {c.itemB.label}</p>
+                  <p className="mt-1 text-sm text-muted">{c.reason}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
           </>
         )}

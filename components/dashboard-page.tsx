@@ -2,92 +2,73 @@
 
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { DashboardStats } from "@/components/dashboard-stats";
+import { DashboardFeaturedWorkspace } from "@/components/dashboard-featured-workspace";
+import { DashboardAttention } from "@/components/dashboard-attention";
+import { DashboardWorkflowPipeline } from "@/components/dashboard-workflow-pipeline";
 import { AIAssistanceStats } from "@/components/ai-assistance-stats";
 import { RecentActivity } from "@/components/recent-activity";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const workflowSteps = [
-  { label: "Discover", href: "/assets" },
-  { label: "Curate", href: "/curation" },
-  { label: "Evaluate", href: "/curation" },
-  { label: "Compare", href: "/compare" },
-  { label: "Decide", href: "/reviews" },
-  { label: "Prepare", href: "/production-ready" },
-];
+import { useAssets } from "@/lib/assets-context";
 
 export function DashboardPage() {
+  const { stats } = useAssets();
+
   return (
-    <AppShell
-      title="Dashboard"
-      description="Operational overview — all metrics reflect your current session state."
-    >
-      <div className="space-y-8">
-        <section aria-labelledby="asset-overview-heading">
-          <h2 id="asset-overview-heading" className="section-label mb-4">
-            Asset Overview
+    <AppShell hideHeader>
+      <div className="space-y-12 lg:space-y-16">
+        <section aria-labelledby="dashboard-hero">
+          <p id="dashboard-hero" className="display-subtitle">
+            AssetPilot AI
+          </p>
+          <h1 className="display-title mt-2 max-w-3xl">
+            AI-assisted digital asset curation
+          </h1>
+          <p className="editorial-lead mt-4">
+            {stats.total} assets in your session workspace — curated with simulated AI assistance
+            and human-in-the-loop decisions.
+          </p>
+          <div className="mt-6">
+            <Link href="/curation">
+              <Button type="button">Open Curation Queue</Button>
+            </Link>
+          </div>
+        </section>
+
+        <section aria-labelledby="workspace-heading" className="editorial-section">
+          <h2 id="workspace-heading" className="section-label mb-6">
+            Workspace
           </h2>
-          <DashboardStats />
+          <DashboardFeaturedWorkspace />
         </section>
 
-        <section aria-labelledby="ai-assistance-heading">
-          <AIAssistanceStats />
+        <section aria-labelledby="attention-heading" className="editorial-section">
+          <h2 id="attention-heading" className="section-label mb-2">
+            Attention
+          </h2>
+          <DashboardAttention />
         </section>
 
-        <section aria-labelledby="workflow-heading">
-          <Card>
-            <CardHeader>
-              <h2 id="workflow-heading" className="section-title">
+        <section aria-labelledby="workflow-heading" className="editorial-section">
+          <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="workflow-heading" className="section-label">
                 Curation Workflow
               </h2>
-              <p className="mt-0.5 text-xs text-muted">
+              <p className="mt-1 text-sm text-muted">
                 AI assists. The curator evaluates and decides.
               </p>
-            </CardHeader>
-            <CardContent>
-              <ol className="flex flex-wrap gap-2">
-                {workflowSteps.map((step, i) => (
-                  <li key={step.label}>
-                    <Link
-                      href={step.href}
-                      className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-accent/30 hover:bg-surface-elevated"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-sm bg-accent-muted text-[10px] font-bold text-accent">
-                        {i + 1}
-                      </span>
-                      {step.label}
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section aria-labelledby="recent-activity-heading">
-          <RecentActivity />
-        </section>
-
-        <Card className="border-accent/20 bg-accent-muted/30">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium text-foreground">Suggested demo path</p>
-            <p className="mt-1 text-sm text-muted">
-              Dashboard → Curation Queue → Review Workspace → Compare Assets → Production Readiness.
-              Also try Asset Library upload, metadata editing, and version management.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/curation">
-                <Button type="button">Start with Curation Queue</Button>
-              </Link>
-              <Link href="/assets">
-                <Button type="button" variant="secondary">
-                  Browse Asset Library
-                </Button>
-              </Link>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <DashboardWorkflowPipeline />
+        </section>
+
+        <section aria-labelledby="recent-activity-heading" className="editorial-section">
+          <RecentActivity compact />
+        </section>
+
+        <section aria-labelledby="ai-assistance-heading" className="editorial-section">
+          <AIAssistanceStats />
+        </section>
       </div>
     </AppShell>
   );
