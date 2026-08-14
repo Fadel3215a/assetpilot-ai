@@ -27,7 +27,7 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
   return (
     <Link
       href={`/curation/${asset.id}`}
-      className="group flex flex-col overflow-hidden rounded-md border border-border bg-surface transition-colors hover:border-accent/30"
+      className="group flex flex-col overflow-hidden rounded-md border border-border bg-surface transition-[transform,border-color,box-shadow] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_12px_28px_-16px_rgba(0,0,0,0.7)] motion-reduce:transition-none motion-reduce:transform-none"
     >
       <div className="visual-hover">
         <AssetThumbnail
@@ -67,7 +67,7 @@ export function CurationQueueItem({ asset, collection }: CurationQueueItemProps)
         </div>
 
         <span className="inline-block text-sm font-medium text-accent">
-          Review →
+          Review <span className="arrow-shift" aria-hidden="true">→</span>
         </span>
       </div>
     </Link>

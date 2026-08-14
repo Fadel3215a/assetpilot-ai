@@ -38,7 +38,7 @@ export function DashboardFeaturedWorkspace() {
     <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
       <Link
         href={`/assets/${featured.id}`}
-        className="group visual-hover relative overflow-hidden rounded-md border border-border lg:col-span-8"
+        className="group visual-hover relative overflow-hidden rounded-md border border-border transition-[transform,border-color,box-shadow] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-[0_16px_40px_-20px_rgba(0,245,160,0.18)] motion-reduce:transition-none motion-reduce:transform-none lg:col-span-8"
       >
         <AssetThumbnail
           src={version.thumbnailPath}
@@ -66,7 +66,7 @@ export function DashboardFeaturedWorkspace() {
             <Link
               key={asset.id}
               href={`/assets/${asset.id}`}
-              className="group visual-hover overflow-hidden rounded-md border border-border"
+              className="group visual-hover overflow-hidden rounded-md border border-border transition-[transform,border-color,box-shadow] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_12px_28px_-16px_rgba(0,0,0,0.7)] motion-reduce:transition-none motion-reduce:transform-none"
             >
               <AssetThumbnail
                 src={v.thumbnailPath}

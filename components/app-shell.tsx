@@ -26,7 +26,7 @@ export function AppShell({
         {!hideHeader && title && (
           <Header title={title} description={description} size={headerSize} />
         )}
-        <main className="flex-1 px-5 py-6 lg:px-10 lg:py-8">
+        <main className="page-fade flex-1 px-5 py-6 lg:px-10 lg:py-8">
           {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
           {children}
         </main>

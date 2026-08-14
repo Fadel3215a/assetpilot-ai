@@ -19,6 +19,7 @@ export function AssetUpload() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastUploadedId, setLastUploadedId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -108,10 +109,11 @@ export function AssetUpload() {
       />
 
       <div
-        className={`upload-dropzone ${isProcessing ? "pointer-events-none opacity-60" : ""}`}
+        className={`upload-dropzone ${dragging ? "upload-dropzone-dragover" : ""} ${isProcessing ? "pointer-events-none opacity-60" : ""}`}
         role="button"
         tabIndex={isProcessing ? -1 : 0}
         aria-label="Upload files by clicking or dropping"
+        aria-busy={isProcessing}
         onClick={openFilePicker}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -119,9 +121,18 @@ export function AssetUpload() {
             openFilePicker();
           }
         }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
         onDragOver={(e) => e.preventDefault()}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragging(false);
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           handleFiles(e.dataTransfer.files);
         }}
       >
@@ -133,7 +144,11 @@ export function AssetUpload() {
           ))}
         </div>
         <p className="mt-4 text-sm font-medium text-foreground">
-          {isProcessing ? "Processing…" : "Drop files here or click to browse"}
+          {isProcessing
+            ? "Processing…"
+            : dragging
+              ? "Release to upload"
+              : "Drop files here or click to browse"}
         </p>
         <p className="mt-1 text-xs text-muted">
           Category detected from file type and extension.

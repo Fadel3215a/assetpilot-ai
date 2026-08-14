@@ -22,7 +22,7 @@ export function AIObservations({ assetId, observations, dismissedIds }: AIObserv
   return (
     <ul className="space-y-2">
       {active.map((obs) => (
-        <li key={obs.id} className="panel-ai p-3">
+        <li key={obs.id} className="panel-ai p-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:border-accent/25">
           <p className="text-sm text-foreground">
             <span className="mr-1 text-status-warning" aria-hidden="true">⚠</span>
             {obs.text}

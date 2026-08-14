@@ -88,10 +88,12 @@ export function AssetCard({
     </>
   );
 
-  const cardClasses = `group flex h-full flex-col overflow-hidden rounded-md border bg-surface transition-colors ${
+  const cardClasses = `group flex h-full flex-col overflow-hidden rounded-md border bg-surface transition-[transform,border-color,box-shadow] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] motion-reduce:transition-none motion-reduce:transform-none ${
     selected
       ? "border-accent ring-1 ring-accent/30"
-      : "border-border hover:border-accent/30"
+      : isFeatured
+        ? "border-border hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-[0_16px_40px_-20px_rgba(0,245,160,0.18)]"
+        : "border-border hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_12px_28px_-16px_rgba(0,0,0,0.7)]"
   }`;
 
   if (bulkMode) {

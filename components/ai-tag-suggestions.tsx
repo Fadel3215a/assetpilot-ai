@@ -26,7 +26,7 @@ export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSu
   return (
     <ul className="space-y-3">
       {active.map((s) => (
-        <li key={s.id} className="panel-ai p-3">
+        <li key={s.id} className="panel-ai p-3 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:border-accent/25">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <span className="rounded-sm bg-status-ai-muted px-2 py-0.5 text-sm font-medium text-status-ai">

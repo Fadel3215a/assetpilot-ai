@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  /* Palette (unchanged) */
   --background: #0b0f12;
   --surface: #161c22;
   --surface-elevated: #1c242c;
@@ -24,6 +25,15 @@
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
+
+  /* Motion tokens */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 400ms;
+  --duration-reveal: 520ms;
 }
 
 @theme inline {
@@ -63,12 +73,46 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Disable transform-based motion entirely under reduced motion */
+  .reveal,
+  .reveal-visible {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .visual-hover:hover img,
+  .visual-hover:hover video,
+  .group:hover .visual-hover img,
+  .group:hover .visual-hover video {
+    transform: none !important;
+  }
+
+  .pipeline-step:hover,
+  .upload-dropzone:hover,
+  .upload-dropzone-dragover {
+    transform: none !important;
+  }
+
+  .arrow-shift {
+    transform: none !important;
+  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  /* Visible keyboard focus for links and role=button elements */
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
 @layer components {
@@ -93,7 +137,7 @@ body {
   }
 
   .link-subtle {
-    @apply text-sm text-muted transition-colors hover:text-accent;
+    @apply text-sm text-muted transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:text-accent;
   }
 
   .panel-ai {
@@ -139,11 +183,7 @@ body {
   }
 
   .attention-stat {
-    @apply block border-b border-border py-6 transition-colors hover:border-accent/40;
-  }
-
-  .attention-stat-value {
-    @apply text-5xl font-semibold tracking-tight;
+    @apply block border-b border-border py-6 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:border-accent/40;
   }
 
   .visual-hover {
@@ -152,14 +192,14 @@ body {
 
   .visual-hover img,
   .visual-hover video {
-    @apply transition-transform duration-300 motion-reduce:transition-none motion-reduce:transform-none;
+    @apply transition-transform duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] motion-reduce:transition-none motion-reduce:transform-none;
   }
 
   .visual-hover:hover img,
   .visual-hover:hover video,
   .group:hover .visual-hover img,
   .group:hover .visual-hover video {
-    @apply scale-[1.03];
+    @apply scale-[1.02];
   }
 
   .hero-preview {
@@ -171,15 +211,27 @@ body {
   }
 
   .pipeline-step {
-    @apply relative flex flex-1 flex-col gap-1 border border-border px-4 py-4 transition-colors hover:border-accent/30 sm:min-w-[8rem];
+    @apply relative flex flex-1 flex-col gap-1 border border-border px-4 py-4 transition-[background-color,border-color,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] hover:-translate-y-0.5 hover:border-accent/30 hover:bg-surface-elevated/60 motion-reduce:transition-none motion-reduce:transform-none sm:min-w-[8rem];
   }
 
   .pipeline-step-number {
-    @apply text-[10px] font-semibold uppercase tracking-wider text-accent;
+    @apply text-[10px] font-semibold uppercase tracking-wider text-accent transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)];
+  }
+
+  .pipeline-step:hover .pipeline-step-number {
+    @apply text-accent;
+    text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
   }
 
   .upload-dropzone {
-    @apply flex min-h-[12rem] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center transition-colors hover:border-accent/40 hover:bg-surface-elevated;
+    @apply flex min-h-[12rem] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface px-6 py-10 text-center transition-[border-color,background-color,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] hover:-translate-y-px hover:border-accent/40 hover:bg-surface-elevated motion-reduce:transition-none motion-reduce:transform-none;
+  }
+
+  .upload-dropzone-dragover {
+    @apply border-accent/60 bg-accent-muted;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent),
+      inset 0 0 24px color-mix(in srgb, var(--accent) 5%, transparent);
+    transform: scale(1.01);
   }
 
   .collection-collage {
@@ -192,5 +244,64 @@ body {
 
   .compare-versus {
     @apply flex items-center justify-center px-2 text-xs font-semibold uppercase tracking-widest text-muted;
+  }
+}
+
+@layer utilities {
+  /* Directional arrow that nudges right on hover */
+  .arrow-shift {
+    display: inline-block;
+    transition: transform var(--duration-fast) var(--ease-out-quart);
+  }
+
+  a:hover .arrow-shift,
+  .group:hover .arrow-shift {
+    transform: translateX(2px);
+  }
+
+  /* Scroll reveal */
+  .reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity var(--duration-reveal) var(--ease-out-expo),
+      transform var(--duration-reveal) var(--ease-out-expo);
+    will-change: opacity, transform;
+  }
+
+  .reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Subtle loading pulse */
+  .loading-fallback {
+    animation: pulse-subtle 1.6s var(--ease-standard) infinite;
+  }
+
+  /* Page-level fade-in (CSS only, no route library) */
+  .page-fade {
+    animation: fade-in var(--duration-slow) var(--ease-out-quart) both;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -44,7 +44,7 @@ export function QualityChecklist({
                   type="button"
                   disabled={disabled}
                   onClick={() => onRatingChange(criterion.id, rating)}
-                  className={`rounded-sm border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-sm border px-2.5 py-1 text-xs font-medium transition-[transform,background-color,border-color,color] duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:-translate-y-px active:translate-y-0 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:transform-none ${
                     criterion.rating === rating
                       ? ratingStyles[rating]
                       : "border-border text-muted hover:bg-surface-elevated hover:text-foreground"

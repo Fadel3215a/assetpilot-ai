@@ -32,7 +32,7 @@ export function CollectionDetailPage({ collectionId }: { collectionId: string })
           href="/assets"
           className="link-subtle inline-flex font-medium"
         >
-          Browse Asset Library →
+          Browse Asset Library <span className="arrow-shift" aria-hidden="true">→</span>
         </Link>
 
         {colAssets.length === 0 ? (

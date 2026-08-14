@@ -86,7 +86,7 @@ export function Sidebar() {
             key={href}
             href={href}
             onClick={() => setMobileOpen(false)}
-            className={`relative flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm transition-colors duration-150 motion-reduce:transition-none ${
+            className={`relative flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm transition-[background-color,color,transform] duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:translate-x-0.5 hover:bg-surface-elevated/60 motion-reduce:transition-none motion-reduce:transform-none ${
               active
                 ? "font-medium text-foreground"
                 : "text-muted hover:text-foreground"
@@ -111,7 +111,7 @@ export function Sidebar() {
     <>
       <button
         type="button"
-        className="fixed left-4 top-4 z-50 rounded-md border border-border bg-surface p-2 text-foreground lg:hidden"
+        className="fixed left-4 top-4 z-50 rounded-md border border-border bg-surface p-2 text-foreground transition-[transform,background-color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:border-accent/30 hover:bg-surface-elevated active:scale-[0.94] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-expanded={mobileOpen}
         aria-controls="sidebar-nav"
@@ -129,7 +129,7 @@ export function Sidebar() {
       {mobileOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-background/80 lg:hidden"
+          className="page-fade fixed inset-0 z-40 bg-background/80 lg:hidden"
           aria-label="Close navigation overlay"
           onClick={() => setMobileOpen(false)}
         />
@@ -137,7 +137,7 @@ export function Sidebar() {
 
       <aside
         id="sidebar-nav"
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-background transition-transform duration-200 motion-reduce:transition-none lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-background transition-transform duration-[var(--duration-normal)] ease-[var(--ease-out-quart)] motion-reduce:transition-none lg:static lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

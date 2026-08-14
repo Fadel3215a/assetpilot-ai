@@ -6,7 +6,7 @@ import { AssetGrid } from "@/components/asset-grid";
 
 function AssetGridFallback() {
   return (
-    <p className="text-sm text-muted" role="status">
+    <p className="loading-fallback text-sm text-muted" role="status">
       Loading asset library…
     </p>
   );
