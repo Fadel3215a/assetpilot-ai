@@ -1,9 +1,4 @@
 import { ReviewWorkspacePage } from "@/components/review-workspace-page";
-import { generateStaticAssetParams } from "@/lib/static-params";
-
-export function generateStaticParams() {
-  return generateStaticAssetParams();
-}
 
 export default async function CurationReviewPage({
   params,

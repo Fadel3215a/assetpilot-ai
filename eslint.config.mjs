@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Duplicate/extracted workspace — not part of the active app:
     "extracted/**",
+    // Prisma-generated client:
+    "lib/generated/**",
   ]),
 ]);
 

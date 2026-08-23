@@ -53,3 +53,13 @@ Thumbs.db
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# keep example env tracked
+!.env.example
+
+# prisma generated client (created by prisma generate)
+/lib/generated/
+
+# uploaded media binaries (served via /media route)
+/storage/uploads/*
+!/storage/uploads/.gitkeep

@@ -1,0 +1,224 @@
+// AssetPilot AI — Prisma schema (Stage 1: Data Persistence).
+//
+// Hybrid strategy: normalized core models for entities that are queried or
+// enumerated, typed Json columns for volatile nested structures that map 1:1
+// onto domain interfaces in types/ (metadata, scoring, checklists, AI blobs).
+//
+// Enum note: Prisma enum members cannot start with a digit, so AssetType "3d"
+// is stored as THREE_D and translated at the DAL boundary (lib/server/mappers).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../lib/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AssetType {
+  image
+  video
+  audio
+  THREE_D
+  other
+}
+
+enum AssetStatus {
+  DRAFT
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  PRODUCTION_READY
+}
+
+enum ReviewDecisionType {
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  PENDING
+}
+
+enum QueuePriority {
+  high
+  medium
+  low
+}
+
+enum ComparisonDecisionType {
+  PREFER_A
+  PREFER_B
+  KEEP_BOTH
+  REJECT_BOTH
+}
+
+enum ActivitySource {
+  ai
+  curator
+}
+
+enum AISuggestionType {
+  tag
+  collection
+  observation
+}
+
+enum CuratorFeedbackAction {
+  accepted
+  edited
+  dismissed
+}
+
+model Collection {
+  id          String @id
+  name        String
+  description String
+  color       String
+
+  assets Asset[]
+
+  @@index([name])
+}
+
+model Asset {
+  id   String    @id
+  name String
+  type AssetType
+
+  status       AssetStatus   @default(DRAFT)
+  collectionId String
+  collection   Collection    @relation(fields: [collectionId], references: [id])
+  tags         String[]      @default([])
+  isAiGenerated Boolean      @default(false)
+  priority     QueuePriority @default(medium)
+
+  // Plain string pointer into versions[] (not an FK) to avoid circular
+  // relation complexity; integrity is enforced by DAL transactions.
+  currentVersionId String?
+
+  usageNotes      String?
+  isSessionUpload Boolean @default(false)
+
+  // Volatile nested structures stored as Json, validated at the mapper
+  // boundary against ExtractedFileMetadata / AIAnalysis /
+  // AssetAISessionState / ProductionReadiness.
+  extractedMetadata   Json?
+  aiAnalysis          Json
+  aiSessionState      Json
+  productionReadiness Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  versions        AssetVersion[]
+  decisionHistory DecisionHistoryEntry[]
+  feedback        CuratorFeedbackEntry[]
+
+  @@index([collectionId])
+  @@index([status])
+}
+
+model AssetVersion {
+  id      String @id
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+  label         String
+
+  thumbnailPath String
+  previewPath   String
+  mediaUrl      String?
+
+  metadata       Json
+  qualityScore   Json
+  reviewDecision Json
+
+  curatorChecklist Json?
+  curatorScore     Int?
+
+  isCurrent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([assetId, versionNumber])
+  @@index([assetId])
+}
+
+model DecisionHistoryEntry {
+  id      String @id
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  reviewer  String
+  timestamp DateTime
+
+  previousStatus AssetStatus
+  newStatus      AssetStatus
+  decision       ReviewDecisionType
+
+  reason       String?
+  curatorScore Int?
+
+  @@index([assetId, timestamp])
+}
+
+model ActivityItem {
+  id String @id
+
+  assetId   String
+  assetName String
+  action    String
+
+  source ActivitySource
+
+  timestamp DateTime
+
+  @@index([timestamp])
+  @@index([assetId])
+}
+
+model ComparisonRecord {
+  id String @id
+
+  reviewer String
+
+  itemAAssetId   String
+  itemAVersionId String
+  itemALabel     String
+
+  itemBAssetId   String
+  itemBVersionId String
+  itemBLabel     String
+
+  decision ComparisonDecisionType
+  reason   String
+
+  timestamp DateTime
+
+  @@index([timestamp])
+}
+
+model CuratorFeedbackEntry {
+  id      String @id
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  suggestionType AISuggestionType
+  suggestion     String
+
+  curatorAction CuratorFeedbackAction
+  finalValue    String?
+
+  timestamp DateTime
+
+  @@index([assetId])
+}
+
+model IgnoredDuplicate {
+  duplicateId String @id
+
+  createdAt DateTime @default(now())
+}

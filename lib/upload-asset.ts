@@ -17,15 +17,22 @@ const baseChecklist = [
   { id: "rights", label: "Usage notes documented", completed: false },
 ];
 
+export interface BuildUploadedAssetOptions {
+  isSessionUpload?: boolean;
+  id?: string;
+}
+
 export function buildUploadedAsset(
   extracted: ExtractedFileMetadata,
   type: AssetType,
-  objectUrl: string,
+  mediaPath: string,
   collectionId: string,
   collections: Collection[],
+  options: BuildUploadedAssetOptions = {},
 ): Asset {
+  const isSessionUpload = options.isSessionUpload ?? true;
   const now = new Date().toISOString();
-  const id = `asset-upload-${Date.now()}`;
+  const id = options.id ?? `asset-upload-${Date.now()}`;
   const versionId = `ver-${id}-1`;
   const name = extracted.fileName.replace(/\.[^.]+$/, "") || extracted.fileName;
 
@@ -46,9 +53,9 @@ export function buildUploadedAsset(
     id: versionId,
     versionNumber: 1,
     label: "Initial upload",
-    thumbnailPath: objectUrl,
-    previewPath: objectUrl,
-    mediaUrl: objectUrl,
+    thumbnailPath: mediaPath,
+    previewPath: mediaPath,
+    mediaUrl: mediaPath,
     metadata,
     qualityScore: { overall: 0 },
     reviewDecision: {
@@ -80,7 +87,7 @@ export function buildUploadedAsset(
     decisionHistory: [],
     usageNotes: "",
     extractedMetadata: extracted,
-    isSessionUpload: true,
+    isSessionUpload,
     createdAt: now,
     updatedAt: now,
     aiAnalysis: { summary: "", strengths: [], potentialIssues: [], suggestedTags: [], suggestedCollectionId: collectionId, suggestedCollectionExplanation: "", productionSuggestion: { recommendation: "REVIEW_REQUIRED", summary: "", explanation: "" }, observations: [], confidence: "low", generatedAt: now },

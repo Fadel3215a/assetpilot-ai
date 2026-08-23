@@ -8,7 +8,6 @@ import { GITHUB_PAGES_BASE_PATH } from "./lib/base-path";
 const isGitHubPages = process.env.GITHUB_PAGES === "true";
 
 const nextConfig: NextConfig = {
-  output: "export",
   trailingSlash: true,
   images: {
     unoptimized: true,
