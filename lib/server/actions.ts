@@ -37,6 +37,7 @@ import {
   getIgnoredDuplicateIds,
 } from "@/lib/server/queries";
 import type {
+  ActivityItem,
   Asset,
   AssetAISessionState,
   ChecklistRating,
@@ -1074,5 +1075,25 @@ export async function resetDemoAction(): Promise<{
   } catch (error) {
     console.error("resetDemoAction failed", error);
     return { ok: false, error: "Could not reset the demo workspace." };
+  }
+}
+
+export async function fetchFeedAction(): Promise<{
+  ok: boolean;
+  error?: string;
+  activity?: ActivityItem[];
+  comparisons?: ComparisonRecord[];
+  feedback?: CuratorFeedbackEntry[];
+}> {
+  try {
+    const [activity, comparisons, feedback] = await Promise.all([
+      getActivity(),
+      getComparisons(),
+      getFeedbackEntries(),
+    ]);
+    return { ok: true, activity, comparisons, feedback };
+  } catch (error) {
+    console.error("fetchFeedAction failed", error);
+    return { ok: false, error: "Could not refresh recent activity." };
   }
 }

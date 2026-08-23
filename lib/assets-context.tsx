@@ -4,18 +4,34 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import {
-  collections,
-  mockActivity,
-  mockAssets,
-  mockComparisons,
-} from "@/data";
+  acceptCollectionSuggestionAction,
+  acceptObservationAction,
+  acceptTagSuggestionAction,
+  bulkAddTagAction,
+  bulkMoveToCollectionAction,
+  bulkRemoveTagAction,
+  createAssetVersionAction,
+  dismissObservationAction,
+  dismissTagSuggestionAction,
+  editTagSuggestionAction,
+  fetchFeedAction,
+  ignoreDuplicateAction,
+  markAIAssistedReviewAction,
+  resetDemoAction,
+  submitComparisonAction,
+  submitReviewAction,
+  updateAssetMetadataAction,
+  updateCuratorChecklistAction,
+  uploadAssetAction,
+} from "@/lib/server/actions";
 import { applyAIAndProduction, useObjectUrlRegistry } from "@/lib/object-url-registry";
-import { buildAssetTimeline, createTimelineEvent } from "@/lib/asset-timeline";
+import { buildAssetTimeline } from "@/lib/asset-timeline";
 import { computeAssetHealth } from "@/lib/asset-health";
 import {
   countPossibleDuplicates,
@@ -63,6 +79,32 @@ interface SubmitComparisonPayload {
   decision: ComparisonDecisionType;
   reason: string;
 }
+
+export interface AssetsProviderInitialState {
+  assets: Asset[];
+  collections: Collection[];
+  activity: ActivityItem[];
+  comparisons: ComparisonRecord[];
+  feedback: CuratorFeedbackEntry[];
+  ignoredDuplicateIds: string[];
+}
+
+interface StateSnapshot {
+  assets: Asset[];
+  collections: Collection[];
+  activity: ActivityItem[];
+  comparisons: ComparisonRecord[];
+  feedback: CuratorFeedbackEntry[];
+  aiSessions: Record<string, AssetAISessionState>;
+  ignoredDuplicates: Set<string>;
+}
+
+type ServerActionResult = {
+  ok: boolean;
+  error?: string;
+  asset?: Asset;
+  assets?: Asset[];
+};
 
 interface AssetsContextValue {
   assets: Asset[];
@@ -113,6 +155,8 @@ interface AssetsContextValue {
   aiStats: AIAssistanceStats;
   getAllDecisionHistory: () => DecisionHistoryEntry[];
   resetDemo: () => void;
+  lastError: string | null;
+  dismissError: () => void;
 }
 
 const AssetsContext = createContext<AssetsContextValue | null>(null);
@@ -140,15 +184,68 @@ function mapActionToStatus(action: ReviewAction): AssetStatus {
   return statusFromDecision(action);
 }
 
-export function AssetsProvider({ children }: { children: ReactNode }) {
+function computeChecklistUpdate(asset: Asset, criterionId: string, rating: ChecklistRating): Asset {
+  const updatedVersions = asset.versions.map((version) => {
+    if (!version.isCurrent || !version.curatorChecklist) return version;
+    const checklist = version.curatorChecklist.map((c) =>
+      c.id === criterionId ? { ...c, rating } : c,
+    );
+    const curatorScore = calculateCuratorScore(checklist);
+    return {
+      ...version,
+      curatorChecklist: checklist,
+      curatorScore,
+      qualityScore: { ...version.qualityScore, overall: curatorScore },
+    };
+  });
+
+  const updated = { ...asset, versions: updatedVersions };
+  const prod = evaluateProductionCriteria(updated);
+  return {
+    ...updated,
+    productionReadiness: {
+      score: prod.score,
+      checklist: prod.items.map((i) => ({
+        id: i.id,
+        label: i.label,
+        completed: i.completed,
+      })),
+      readyAt: prod.ready ? asset.productionReadiness.readyAt : undefined,
+    },
+  };
+}
+
+export function AssetsProvider({
+  children,
+  initialState,
+}: {
+  children: ReactNode;
+  initialState: AssetsProviderInitialState;
+}) {
   const { register: registerObjectUrl, revokeAll: revokeAllObjectUrls } = useObjectUrlRegistry();
-  const [assets, setAssets] = useState<Asset[]>(mockAssets);
-  const [activity, setActivity] = useState<ActivityItem[]>(mockActivity);
-  const [comparisons, setComparisons] = useState<ComparisonRecord[]>(mockComparisons);
-  const [feedback, setFeedback] = useState<CuratorFeedbackEntry[]>([]);
+  const [assets, setAssets] = useState<Asset[]>(initialState.assets);
+  const [collections, setCollections] = useState<Collection[]>(initialState.collections);
+  const [activity, setActivity] = useState<ActivityItem[]>(initialState.activity);
+  const [comparisons, setComparisons] = useState<ComparisonRecord[]>(initialState.comparisons);
+  const [feedback, setFeedback] = useState<CuratorFeedbackEntry[]>(initialState.feedback);
   const [aiSessions, setAiSessions] = useState<Record<string, AssetAISessionState>>({});
-  const [ignoredDuplicates, setIgnoredDuplicates] = useState<Set<string>>(new Set());
-  const [timelineExtras, setTimelineExtras] = useState<AssetTimelineEntry[]>([]);
+  const [ignoredDuplicates, setIgnoredDuplicates] = useState<Set<string>>(
+    new Set(initialState.ignoredDuplicateIds),
+  );
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lastError) return;
+    const timer = setTimeout(() => setLastError(null), 6000);
+    return () => clearTimeout(timer);
+  }, [lastError]);
+
+  const fail = useCallback((message: string) => {
+    console.error(`[AssetPilot] ${message}`);
+    setLastError(message);
+  }, []);
+
+  const dismissError = useCallback(() => setLastError(null), []);
 
   const addActivity = useCallback(
     (item: Omit<ActivityItem, "id">) => {
@@ -173,6 +270,70 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const takeSnapshot = useCallback(
+    (): StateSnapshot => ({
+      assets,
+      collections,
+      activity,
+      comparisons,
+      feedback,
+      aiSessions,
+      ignoredDuplicates,
+    }),
+    [assets, collections, activity, comparisons, feedback, aiSessions, ignoredDuplicates],
+  );
+
+  const restoreSnapshot = useCallback((snapshot: StateSnapshot) => {
+    setAssets(snapshot.assets);
+    setCollections(snapshot.collections);
+    setActivity(snapshot.activity);
+    setComparisons(snapshot.comparisons);
+    setFeedback(snapshot.feedback);
+    setAiSessions(snapshot.aiSessions);
+    setIgnoredDuplicates(snapshot.ignoredDuplicates);
+  }, []);
+
+  const applyCanonicalAssets = useCallback((incoming: Asset[]) => {
+    if (incoming.length === 0) return;
+    const byId = new Map(incoming.map((a) => [a.id, a]));
+    setAssets((prev) => prev.map((a) => byId.get(a.id) ?? a));
+  }, []);
+
+  const reconcileFeed = useCallback(() => {
+    void fetchFeedAction()
+      .then((res) => {
+        if (res.ok && res.activity && res.comparisons && res.feedback) {
+          setActivity(res.activity);
+          setComparisons(res.comparisons);
+          setFeedback(res.feedback);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const runAction = useCallback(
+    (snapshot: StateSnapshot, invoke: () => Promise<ServerActionResult>, fallbackError: string) => {
+      void invoke()
+        .then((res) => {
+          if (!res.ok) {
+            restoreSnapshot(snapshot);
+            fail(res.error ?? fallbackError);
+            return;
+          }
+          const canonical: Asset[] = [];
+          if (res.asset) canonical.push(res.asset);
+          if (res.assets) canonical.push(...res.assets);
+          applyCanonicalAssets(canonical);
+          reconcileFeed();
+        })
+        .catch(() => {
+          restoreSnapshot(snapshot);
+          fail(fallbackError);
+        });
+    },
+    [restoreSnapshot, applyCanonicalAssets, reconcileFeed, fail],
+  );
+
   const getAsset = useCallback(
     (id: string) => assets.find((a) => a.id === id),
     [assets],
@@ -183,15 +344,30 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
     [aiSessions],
   );
 
-  const markAIAssistedReview = useCallback((assetId: string) => {
-    setAiSessions((prev) => ({
-      ...prev,
-      [assetId]: {
-        ...(prev[assetId] ?? defaultSession()),
-        aiAssistedReview: true,
-      },
-    }));
-  }, []);
+  const markAIAssistedReview = useCallback(
+    (assetId: string) => {
+      const prevSessions = aiSessions;
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          aiAssistedReview: true,
+        },
+      }));
+      void markAIAssistedReviewAction(assetId)
+        .then((res) => {
+          if (!res.ok) {
+            setAiSessions(prevSessions);
+            fail(res.error ?? "Could not save AI-assisted review flag.");
+          }
+        })
+        .catch(() => {
+          setAiSessions(prevSessions);
+          fail("Could not save AI-assisted review flag.");
+        });
+    },
+    [aiSessions, fail],
+  );
 
   const getQueueAssets = useCallback(
     () => assets.filter((a) => isQueueAsset(a.status)),
@@ -200,42 +376,20 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
 
   const updateCuratorChecklist = useCallback(
     (assetId: string, criterionId: string, rating: ChecklistRating) => {
-      setAssets((prev) =>
-        prev.map((asset) => {
-          if (asset.id !== assetId) return asset;
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
 
-          const updatedVersions = asset.versions.map((version) => {
-            if (!version.isCurrent || !version.curatorChecklist) return version;
-            const checklist = version.curatorChecklist.map((c) =>
-              c.id === criterionId ? { ...c, rating } : c,
-            );
-            const curatorScore = calculateCuratorScore(checklist);
-            return {
-              ...version,
-              curatorChecklist: checklist,
-              curatorScore,
-              qualityScore: { ...version.qualityScore, overall: curatorScore },
-            };
-          });
+      const optimistic = computeChecklistUpdate(asset, criterionId, rating);
+      const snapshot = takeSnapshot();
+      setAssets((prev) => prev.map((a) => (a.id === assetId ? optimistic : a)));
 
-          const updated = { ...asset, versions: updatedVersions };
-          const prod = evaluateProductionCriteria(updated);
-          return {
-            ...updated,
-            productionReadiness: {
-              score: prod.score,
-              checklist: prod.items.map((i) => ({
-                id: i.id,
-                label: i.label,
-                completed: i.completed,
-              })),
-              readyAt: prod.ready ? asset.productionReadiness.readyAt : undefined,
-            },
-          };
-        }),
+      runAction(
+        snapshot,
+        () => updateCuratorChecklistAction(assetId, criterionId, rating),
+        "Could not save checklist rating.",
       );
     },
-    [],
+    [assets, runAction, takeSnapshot],
   );
 
   const acceptTagSuggestion = useCallback(
@@ -244,6 +398,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return;
+
+      const snapshot = takeSnapshot();
 
       setAssets((prev) =>
         prev.map((a) =>
@@ -276,8 +432,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => acceptTagSuggestionAction(assetId, tagId),
+        "Could not accept tag suggestion.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const editTagSuggestion = useCallback(
@@ -288,6 +450,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return;
+
+      const snapshot = takeSnapshot();
 
       setAssets((prev) =>
         prev.map((a) =>
@@ -320,8 +484,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => editTagSuggestionAction(assetId, tagId, trimmed),
+        "Could not save edited tag.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const dismissTagSuggestion = useCallback(
@@ -330,6 +500,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       const suggestion = asset.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return;
+
+      const snapshot = takeSnapshot();
 
       setAiSessions((prev) => ({
         ...prev,
@@ -353,8 +525,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => dismissTagSuggestionAction(assetId, tagId),
+        "Could not dismiss tag suggestion.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const acceptCollectionSuggestion = useCallback(
@@ -362,6 +540,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       const asset = assets.find((a) => a.id === assetId);
       const collection = collections.find((c) => c.id === collectionId);
       if (!asset || !collection) return;
+
+      const snapshot = takeSnapshot();
 
       setAssets((prev) =>
         prev.map((a) => (a.id === assetId ? { ...a, collectionId } : a)),
@@ -382,8 +562,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => acceptCollectionSuggestionAction(assetId, collectionId),
+        "Could not apply collection suggestion.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, collections, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const dismissObservation = useCallback(
@@ -392,6 +578,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       const obs = asset.aiAnalysis.observations.find((o) => o.id === observationId);
       if (!obs) return;
+
+      const snapshot = takeSnapshot();
 
       setAiSessions((prev) => ({
         ...prev,
@@ -418,8 +606,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => dismissObservationAction(assetId, observationId),
+        "Could not dismiss observation.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const acceptObservation = useCallback(
@@ -428,6 +622,8 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return;
       const obs = asset.aiAnalysis.observations.find((o) => o.id === observationId);
       if (!obs) return;
+
+      const snapshot = takeSnapshot();
 
       setAiSessions((prev) => ({
         ...prev,
@@ -455,8 +651,14 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
         source: "curator",
       });
+
+      runAction(
+        snapshot,
+        () => acceptObservationAction(assetId, observationId),
+        "Could not accept observation.",
+      );
     },
-    [assets, addActivity, addFeedback],
+    [assets, addActivity, addFeedback, runAction, takeSnapshot],
   );
 
   const getAssetFeedback = useCallback(
@@ -466,41 +668,67 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
 
   const uploadAsset = useCallback(
     async (file: File, collectionId = "col-archive-draft") => {
+      let objectUrl: string | null = null;
+      let optimisticId: string | null = null;
+      const snapshot = takeSnapshot();
+
       try {
         const extracted = await extractFileMetadata(file);
         const category = inferUploadCategory(file);
         const type = mapCategoryToAssetType(category);
-        const objectUrl = registerObjectUrl(URL.createObjectURL(file));
-        let asset = buildUploadedAsset(extracted, type, objectUrl, collectionId, collections);
-        asset = applyAIAndProduction(asset, collections);
+        objectUrl = registerObjectUrl(URL.createObjectURL(file));
+        optimisticId = `asset-upload-${Date.now()}`;
+        let optimistic = buildUploadedAsset(extracted, type, objectUrl, collectionId, collections, {
+          id: optimisticId,
+          isSessionUpload: false,
+        });
+        optimistic = applyAIAndProduction(optimistic, collections);
 
-        setAssets((prev) => [asset, ...prev]);
-
-        const event = createTimelineEvent(asset.id, "Asset uploaded (session-only)", "system");
-        setTimelineExtras((prev) => [event, ...prev]);
+        setAssets((prev) => [optimistic, ...prev]);
 
         addActivity({
-          assetId: asset.id,
-          assetName: asset.name,
-          action: "Asset uploaded (session-only)",
+          assetId: optimistic.id,
+          assetName: optimistic.name,
+          action: "Asset uploaded",
           timestamp: new Date().toISOString(),
           source: "curator",
         });
 
         addActivity({
-          assetId: asset.id,
-          assetName: asset.name,
+          assetId: optimistic.id,
+          assetName: optimistic.name,
           action: "AI analysis generated for uploaded asset",
           timestamp: new Date().toISOString(),
           source: "ai",
         });
 
-        return { ok: true, assetId: asset.id };
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("collectionId", collectionId);
+        formData.append("extractedMetadata", JSON.stringify(extracted));
+
+        const res = await uploadAssetAction(formData);
+        if (!res.ok || !res.asset) {
+          restoreSnapshot(snapshot);
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          return { ok: false as const, error: res.error ?? "Could not process uploaded file." };
+        }
+
+        const canonical = res.asset;
+        setAssets((prev) => [
+          canonical,
+          ...prev.filter((a) => a.id !== optimisticId && a.id !== canonical.id),
+        ]);
+        reconcileFeed();
+
+        return { ok: true as const, assetId: canonical.id };
       } catch {
-        return { ok: false, error: "Could not process uploaded file." };
+        restoreSnapshot(snapshot);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        return { ok: false as const, error: "Could not process uploaded file." };
       }
     },
-    [addActivity, registerObjectUrl],
+    [collections, registerObjectUrl, addActivity, restoreSnapshot, reconcileFeed, takeSnapshot],
   );
 
   const updateAssetMetadata = useCallback(
@@ -509,6 +737,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       if (!asset) return { ok: false, error: "Asset not found." };
 
       const now = new Date().toISOString();
+      const snapshot = takeSnapshot();
 
       setAssets((prev) =>
         prev.map((a) => {
@@ -542,9 +771,6 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         }),
       );
 
-      const event = createTimelineEvent(assetId, "Metadata updated by curator", "curator");
-      setTimelineExtras((prev) => [event, ...prev]);
-
       addActivity({
         assetId,
         assetName: payload.name,
@@ -553,35 +779,36 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         source: "curator",
       });
 
+      runAction(
+        snapshot,
+        () => updateAssetMetadataAction(assetId, payload),
+        "Could not save metadata changes.",
+      );
+
       return { ok: true };
     },
-    [assets, addActivity],
+    [assets, collections, addActivity, runAction, takeSnapshot],
   );
 
   const createAssetVersion = useCallback(
     async (assetId: string, file: File | null, label: string) => {
       const asset = assets.find((a) => a.id === assetId);
-      if (!asset) return { ok: false, error: "Asset not found." };
+      if (!asset) return { ok: false as const, error: "Asset not found." };
+
+      let objectUrl: string | null = null;
+      const snapshot = takeSnapshot();
 
       try {
-        let objectUrl: string | null = null;
         let extracted = null;
         if (file) {
           extracted = await extractFileMetadata(file);
           objectUrl = registerObjectUrl(URL.createObjectURL(file));
         }
 
-        let updated = buildNewVersion(asset, objectUrl, extracted, label);
-        updated = applyAIAndProduction(updated, collections);
+        let optimistic = buildNewVersion(asset, objectUrl, extracted, label);
+        optimistic = applyAIAndProduction(optimistic, collections);
 
-        setAssets((prev) => prev.map((a) => (a.id === assetId ? updated : a)));
-
-        const event = createTimelineEvent(
-          assetId,
-          `Version ${updated.versions.find((v) => v.isCurrent)?.versionNumber} created`,
-          "curator",
-        );
-        setTimelineExtras((prev) => [event, ...prev]);
+        setAssets((prev) => prev.map((a) => (a.id === assetId ? optimistic : a)));
 
         addActivity({
           assetId,
@@ -591,17 +818,50 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           source: "curator",
         });
 
-        return { ok: true };
+        const formData = new FormData();
+        formData.append("assetId", assetId);
+        formData.append("label", label);
+        if (file) formData.append("file", file);
+        if (extracted) formData.append("extractedMetadata", JSON.stringify(extracted));
+
+        const res = await createAssetVersionAction(formData);
+        if (!res.ok || !res.asset) {
+          restoreSnapshot(snapshot);
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          return { ok: false as const, error: res.error ?? "Could not create version." };
+        }
+
+        applyCanonicalAssets([res.asset]);
+        reconcileFeed();
+
+        return { ok: true as const };
       } catch {
-        return { ok: false, error: "Could not create version." };
+        restoreSnapshot(snapshot);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        return { ok: false as const, error: "Could not create version." };
       }
     },
-    [assets, addActivity, registerObjectUrl],
+    [assets, collections, registerObjectUrl, addActivity, restoreSnapshot, applyCanonicalAssets, reconcileFeed, takeSnapshot],
   );
 
-  const ignoreDuplicate = useCallback((duplicateId: string) => {
-    setIgnoredDuplicates((prev) => new Set([...prev, duplicateId]));
-  }, []);
+  const ignoreDuplicate = useCallback(
+    (duplicateId: string) => {
+      const prevSet = ignoredDuplicates;
+      setIgnoredDuplicates((prev) => new Set([...prev, duplicateId]));
+      void ignoreDuplicateAction(duplicateId)
+        .then((res) => {
+          if (!res.ok) {
+            setIgnoredDuplicates(prevSet);
+            fail("Could not ignore duplicate candidate.");
+          }
+        })
+        .catch(() => {
+          setIgnoredDuplicates(prevSet);
+          fail("Could not ignore duplicate candidate.");
+        });
+    },
+    [ignoredDuplicates, fail],
+  );
 
   const getDuplicateCandidates = useCallback(
     (assetId: string) => findDuplicateCandidates(assets, assetId, ignoredDuplicates),
@@ -610,7 +870,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
 
   const getRelatedAssets = useCallback(
     (assetId: string) => findRelatedAssets(assets, assetId, collections),
-    [assets],
+    [assets, collections],
   );
 
   const getAssetHealth = useCallback(
@@ -626,14 +886,9 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
     (assetId: string) => {
       const asset = assets.find((a) => a.id === assetId);
       if (!asset) return [];
-      return buildAssetTimeline(
-        asset,
-        activity,
-        feedback,
-        timelineExtras.filter((e) => e.assetId === assetId),
-      );
+      return buildAssetTimeline(asset, activity, feedback, []);
     },
-    [assets, activity, feedback, timelineExtras],
+    [assets, activity, feedback],
   );
 
   const bulkAddTag = useCallback(
@@ -641,6 +896,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       const trimmed = tag.trim();
       if (!trimmed) return;
       const now = new Date().toISOString();
+      const snapshot = takeSnapshot();
       setAssets((prev) =>
         prev.map((a) =>
           assetIds.includes(a.id) && !a.tags.includes(trimmed)
@@ -660,13 +916,19 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           });
         }
       });
+      runAction(
+        snapshot,
+        () => bulkAddTagAction(assetIds, trimmed),
+        "Could not apply bulk tag.",
+      );
     },
-    [assets, addActivity],
+    [assets, collections, addActivity, runAction, takeSnapshot],
   );
 
   const bulkRemoveTag = useCallback(
     (assetIds: string[], tag: string) => {
       const now = new Date().toISOString();
+      const snapshot = takeSnapshot();
       setAssets((prev) =>
         prev.map((a) =>
           assetIds.includes(a.id)
@@ -677,14 +939,20 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
             : a,
         ),
       );
+      runAction(
+        snapshot,
+        () => bulkRemoveTagAction(assetIds, tag),
+        "Could not remove tag.",
+      );
     },
-    [],
+    [collections, runAction, takeSnapshot],
   );
 
   const bulkMoveToCollection = useCallback(
     (assetIds: string[], collectionId: string) => {
       const now = new Date().toISOString();
       const collection = collections.find((c) => c.id === collectionId);
+      const snapshot = takeSnapshot();
       setAssets((prev) =>
         prev.map((a) =>
           assetIds.includes(a.id)
@@ -704,8 +972,13 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
           });
         }
       });
+      runAction(
+        snapshot,
+        () => bulkMoveToCollectionAction(assetIds, collectionId),
+        "Could not move assets to collection.",
+      );
     },
-    [assets, addActivity],
+    [assets, collections, addActivity, runAction, takeSnapshot],
   );
 
   const submitReview = useCallback(
@@ -729,6 +1002,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       const previousStatus = asset.status;
       const newStatus = mapActionToStatus(action);
       const curatorScore = calculateCuratorScore(checklist);
+      const snapshot = takeSnapshot();
 
       const historyEntry: DecisionHistoryEntry = {
         id: `dh-${Date.now()}`,
@@ -798,9 +1072,15 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         source: "curator",
       });
 
+      runAction(
+        snapshot,
+        () => submitReviewAction(assetId, payload),
+        "Could not save review decision.",
+      );
+
       return { ok: true };
     },
-    [assets, addActivity],
+    [assets, addActivity, runAction, takeSnapshot],
   );
 
   const submitComparison = useCallback(
@@ -816,6 +1096,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         reviewer: CURATOR,
         ...payload,
       };
+      const snapshot = takeSnapshot();
 
       setComparisons((prev) => [record, ...prev]);
 
@@ -857,9 +1138,15 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
         source: "curator",
       });
 
+      runAction(
+        snapshot,
+        () => submitComparisonAction(payload),
+        "Could not save comparison decision.",
+      );
+
       return { ok: true };
     },
-    [addActivity],
+    [addActivity, runAction, takeSnapshot],
   );
 
   const getAllDecisionHistory = useCallback(() => {
@@ -871,15 +1158,31 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
   }, [assets]);
 
   const resetDemo = useCallback(() => {
+    const snapshot = takeSnapshot();
     revokeAllObjectUrls();
-    setAssets(mockAssets);
-    setActivity(mockActivity);
-    setComparisons(mockComparisons);
-    setFeedback([]);
     setAiSessions({});
     setIgnoredDuplicates(new Set());
-    setTimelineExtras([]);
-  }, [revokeAllObjectUrls]);
+
+    void (async () => {
+      try {
+        const res = await resetDemoAction();
+        if (!res.ok || !res.snapshot) {
+          restoreSnapshot(snapshot);
+          fail(res.error ?? "Could not reset the demo workspace.");
+          return;
+        }
+        setAssets(res.snapshot.assets);
+        setCollections(res.snapshot.collections);
+        setActivity(res.snapshot.activity);
+        setComparisons(res.snapshot.comparisons);
+        setFeedback(res.snapshot.feedback);
+        setIgnoredDuplicates(new Set(res.snapshot.ignoredDuplicateIds));
+      } catch {
+        restoreSnapshot(snapshot);
+        fail("Could not reset the demo workspace.");
+      }
+    })();
+  }, [revokeAllObjectUrls, restoreSnapshot, fail, takeSnapshot]);
 
   const aiStats = useMemo((): AIAssistanceStats => {
     const accepted = feedback.filter((f) => f.curatorAction === "accepted").length;
@@ -919,7 +1222,7 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       metadataIssues: getAssetsWithMetadataIssues(assets, collections),
       possibleDuplicates: countPossibleDuplicates(assets, ignoredDuplicates),
     }),
-    [assets, ignoredDuplicates],
+    [assets, ignoredDuplicates, collections],
   );
 
   const value = useMemo(
@@ -958,9 +1261,12 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       aiStats,
       getAllDecisionHistory,
       resetDemo,
+      lastError,
+      dismissError,
     }),
     [
       assets,
+      collections,
       activity,
       comparisons,
       feedback,
@@ -993,11 +1299,33 @@ export function AssetsProvider({ children }: { children: ReactNode }) {
       aiStats,
       getAllDecisionHistory,
       resetDemo,
+      lastError,
+      dismissError,
     ],
   );
 
   return (
-    <AssetsContext.Provider value={value}>{children}</AssetsContext.Provider>
+    <AssetsContext.Provider value={value}>
+      {children}
+      {lastError ? (
+        <div
+          role="alert"
+          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-lg"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex-1">{lastError}</span>
+            <button
+              type="button"
+              onClick={dismissError}
+              aria-label="Dismiss error"
+              className="text-red-500 transition-colors hover:text-red-700"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </AssetsContext.Provider>
   );
 }
 
