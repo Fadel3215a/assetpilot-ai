@@ -10,6 +10,12 @@ import { prisma, withTransaction, type TxClient } from "@/lib/db";
 import { buildNewVersion, buildUploadedAsset } from "@/lib/upload-asset";
 import { calculateCuratorScore } from "@/lib/quality";
 import { evaluateProductionCriteria } from "@/lib/production";
+import {
+  deriveRenditions,
+  enrichExtractedFileMetadata,
+  fileExtensionOf,
+  type RenditionPaths,
+} from "@/lib/renditions";
 import { statusFromDecision } from "@/lib/utils";
 import {
   parseExtractedMetadata,
@@ -224,16 +230,36 @@ function mediaUrlFor(versionId: string, fileName: string): string {
 
 async function persistUploadBytes(
   storedName: string,
-  file: File,
+  bytes: Buffer,
 ): Promise<void> {
   await mkdir(STORAGE_ROOT, { recursive: true });
-  const bytes = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(STORAGE_ROOT, storedName), bytes);
 }
 
 function nextVersionIdOf(asset: Asset): string {
   const nextNumber = Math.max(...asset.versions.map((v) => v.versionNumber)) + 1;
   return `ver-${asset.id}-${nextNumber}`;
+}
+
+/**
+ * Points the current version's display variants at freshly derived thumbnail
+ * and web-preview URIs. Returns the asset unchanged when no renditions were
+ * produced (non-images, decode failures) so the raw upload paths remain set.
+ */
+function attachRenditions(asset: Asset, renditions: RenditionPaths | null): Asset {
+  if (!renditions) return asset;
+  return {
+    ...asset,
+    versions: asset.versions.map((v) =>
+      v.isCurrent
+        ? {
+            ...v,
+            thumbnailPath: renditions.thumbnailPath,
+            previewPath: renditions.previewPath,
+          }
+        : v,
+    ),
+  };
 }
 
 export async function submitReviewAction(
@@ -818,13 +844,18 @@ export async function uploadAssetAction(formData: FormData): Promise<{
     const versionId = `ver-${assetId}-1`;
     const storedName = `${versionId}-${sanitizeFileName(file.name)}`;
     const mediaPath = mediaUrlFor(versionId, file.name);
+    const extension = fileExtensionOf(file.name);
 
-    let domain = buildUploadedAsset(extracted, type, mediaPath, collectionId, collections, {
+    const fileBytes = Buffer.from(await file.arrayBuffer());
+    const enriched = await enrichExtractedFileMetadata(extracted, fileBytes, extension);
+
+    let domain = buildUploadedAsset(enriched, type, mediaPath, collectionId, collections, {
       isSessionUpload: false,
       id: assetId,
     });
+    domain = attachRenditions(domain, await deriveRenditions(fileBytes, assetId, extension));
 
-    await persistUploadBytes(storedName, file);
+    await persistUploadBytes(storedName, fileBytes);
 
     domain = await withTransaction(async (tx) => {
       await insertAssetWithChildren(tx, domain);
@@ -955,14 +986,23 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
       const collections = await loadCollectionsTx(tx);
 
       let objectUrl: string | null = null;
+      let updated: Asset;
       if (hasFile && extracted && file instanceof File) {
         const versionId = nextVersionIdOf(loaded.domain);
         const storedName = `${versionId}-${sanitizeFileName(file.name)}`;
         objectUrl = mediaUrlFor(versionId, file.name);
-        await persistUploadBytes(storedName, file);
-      }
 
-      let updated = buildNewVersion(loaded.domain, objectUrl, extracted, label);
+        const fileBytes = Buffer.from(await file.arrayBuffer());
+        const extension = fileExtensionOf(file.name);
+        const enriched = await enrichExtractedFileMetadata(extracted, fileBytes, extension);
+
+        updated = buildNewVersion(loaded.domain, objectUrl, enriched, label);
+        updated = attachRenditions(updated, await deriveRenditions(fileBytes, assetId, extension));
+
+        await persistUploadBytes(storedName, fileBytes);
+      } else {
+        updated = buildNewVersion(loaded.domain, objectUrl, extracted, label);
+      }
       updated = await enrich(updated, collections);
 
       await persistSnapshot(tx, updated);

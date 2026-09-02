@@ -106,6 +106,29 @@ function optDimensions(record: Record<string, unknown>): { width: number; height
   return { width: dims.width, height: dims.height };
 }
 
+function optBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function optExif(record: Record<string, unknown>): ExtractedFileMetadata["exif"] {
+  const raw = record.exif;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const rec = raw as Record<string, unknown>;
+  const out: Exclude<ExtractedFileMetadata["exif"], undefined> = {};
+  if (typeof rec.make === "string") out.make = rec.make;
+  if (typeof rec.model === "string") out.model = rec.model;
+  if (typeof rec.orientation === "number") out.orientation = rec.orientation;
+  if (typeof rec.dateTime === "string") out.dateTime = rec.dateTime;
+  if (typeof rec.dateTimeOriginal === "string") out.dateTimeOriginal = rec.dateTimeOriginal;
+  if (typeof rec.iso === "number") out.iso = rec.iso;
+  if (typeof rec.fNumber === "number") out.fNumber = rec.fNumber;
+  if (typeof rec.exposureTime === "number") out.exposureTime = rec.exposureTime;
+  if (typeof rec.focalLengthIn35mm === "number") out.focalLengthIn35mm = rec.focalLengthIn35mm;
+  if (typeof rec.lensModel === "string") out.lensModel = rec.lensModel;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function stringArray(value: unknown, label: string): string[] {
   return asArray(value, label).map((item, i) => {
     if (typeof item !== "string") {
@@ -202,6 +225,13 @@ export function parseExtractedMetadata(value: unknown): ExtractedFileMetadata {
     dimensions: optDimensions(rec),
     duration: optNumber(rec, "duration"),
     lastModified: optNumber(rec, "lastModified"),
+    aspectRatio: optNumber(rec, "aspectRatio"),
+    colorSpace: optString(rec, "colorSpace"),
+    iccProfile: typeof rec.iccProfile === "string" ? rec.iccProfile : undefined,
+    hasAlpha: optBoolean(rec, "hasAlpha"),
+    bitDepth: optNumber(rec, "bitDepth"),
+    orientation: optNumber(rec, "orientation"),
+    exif: optExif(rec),
   };
 }
 

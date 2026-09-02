@@ -5,6 +5,7 @@ export type {
   AssetHealthStatus,
   AssetTimelineEntry,
   DuplicateCandidate,
+  ExtractedExifData,
   ExtractedFileMetadata,
   MetadataEditPayload,
   RelatedAsset,
