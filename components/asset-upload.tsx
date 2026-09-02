@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
 import { validateUploadFile } from "@/lib/upload-validation";
+import { extractFileMetadata } from "@/lib/file-metadata";
+import { consumeAnalysisStream } from "@/lib/ai/stream-client";
 import { Button } from "./ui/button";
 import { Select } from "./ui/select";
 
@@ -20,6 +22,7 @@ export function AssetUpload() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastUploadedId, setLastUploadedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [progressStep, setProgressStep] = useState<string | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -27,6 +30,7 @@ export function AssetUpload() {
     setSuccessMessage(null);
     setLastUploadedId(null);
     setStatus("processing");
+    setProgressStep(null);
 
     let uploaded = 0;
     let lastId: string | null = null;
@@ -50,7 +54,25 @@ export function AssetUpload() {
         if (inputRef.current) inputRef.current.value = "";
         return;
       }
+
+      // Stream AI progress while the canonical record lands.
+      setProgressStep("Queued for AI analysis…");
+      try {
+        const extracted = await extractFileMetadata(file);
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("collectionId", collectionId);
+        formData.append("extractedMetadata", JSON.stringify(extracted));
+        await consumeAnalysisStream(formData, {
+          onProgress: (step) => setProgressStep(step),
+        });
+      } catch {
+        // Non-fatal: stream is a progressive enhancement over the persisted action result.
+        setProgressStep(null);
+      }
     }
+
+    setProgressStep(null);
 
     if (uploaded > 0) {
       setSuccessMessage(
@@ -91,7 +113,10 @@ export function AssetUpload() {
         Status:{" "}
         <span className="font-medium text-foreground">
           {status === "idle" && "Ready to upload"}
-          {status === "processing" && "Processing file and extracting metadata…"}
+          {status === "processing" &&
+            (progressStep
+              ? `Processing file and extracting metadata… ${progressStep}`
+              : "Processing file and extracting metadata…")}
           {status === "ready" && "Upload complete"}
           {status === "error" && "Upload failed"}
         </span>
@@ -203,9 +228,9 @@ export function AssetUpload() {
         </div>
       )}
 
-      <p className="rounded-md border border-status-warning/30 bg-status-warning-muted px-3 py-2 text-xs text-status-warning">
-        Nothing is sent to a server. Very large files may be slow to preview depending on your
-        browser.
+      <p className="rounded-md border border-status-info/30 bg-surface px-3 py-2 text-xs text-muted">
+        Files are stored locally. AI analysis is streamed in real time — with a Gemini key the
+        review is generated live; without one a deterministic local analysis is used.
       </p>
     </section>
   );

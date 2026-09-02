@@ -3,8 +3,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  getAIAnalysisProvider,
-} from "@/lib/ai";
+  getAsyncAIAnalysisProvider,
+} from "@/lib/server/ai-provider";
 import { inferUploadCategory, mapCategoryToAssetType } from "@/lib/file-metadata";
 import { prisma, withTransaction, type TxClient } from "@/lib/db";
 import { buildNewVersion, buildUploadedAsset } from "@/lib/upload-asset";
@@ -141,9 +141,10 @@ async function addFeedback(
   return full;
 }
 
-function enrich(domain: Asset, collections: Collection[]): Asset {
+async function enrich(domain: Asset, collections: Collection[]): Promise<Asset> {
   const updated = { ...domain };
-  updated.aiAnalysis = getAIAnalysisProvider().analyze(updated, collections);
+  const provider = await getAsyncAIAnalysisProvider();
+  updated.aiAnalysis = await provider.analyze(updated, collections);
   const prod = evaluateProductionCriteria(updated);
   updated.productionReadiness = {
     score: prod.score,
@@ -818,7 +819,7 @@ export async function updateAssetMetadataAction(
         ),
       };
 
-      domain = enrich(domain, collections);
+      domain = await enrich(domain, collections);
       await persistSnapshot(tx, domain);
 
       await addActivity(tx, {
@@ -890,7 +891,7 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
       }
 
       let updated = buildNewVersion(loaded.domain, objectUrl, extracted, label);
-      updated = enrich(updated, collections);
+      updated = await enrich(updated, collections);
 
       await persistSnapshot(tx, updated);
       await addActivity(tx, {
@@ -941,7 +942,7 @@ export async function bulkAddTagAction(
         let domain = loaded.domain;
         if (!domain.tags.includes(trimmed)) {
           domain = { ...domain, tags: [...domain.tags, trimmed], updatedAt: timestamp };
-          domain = enrich(domain, collections);
+          domain = await enrich(domain, collections);
           await persistSnapshot(tx, domain);
         }
         touched.push(domain);
@@ -983,7 +984,7 @@ export async function bulkRemoveTagAction(
             tags: domain.tags.filter((t) => t !== tag),
             updatedAt: timestamp,
           };
-          domain = enrich(domain, collections);
+          domain = await enrich(domain, collections);
           await persistSnapshot(tx, domain);
         }
         touched.push(domain);
@@ -1013,7 +1014,7 @@ export async function bulkMoveToCollectionAction(
         if (!loaded) continue;
         let domain = loaded.domain;
         domain = { ...domain, collectionId, updatedAt: timestamp };
-        domain = enrich(domain, collections);
+        domain = await enrich(domain, collections);
         await persistSnapshot(tx, domain);
         touched.push(domain);
 

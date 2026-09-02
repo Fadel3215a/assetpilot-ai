@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAssets } from "@/lib/assets-context";
 import { productionSuggestionLabel } from "@/lib/generate-ai-analysis";
+import { consumeAnalysisStream } from "@/lib/ai/stream-client";
 import { AIConfidence } from "./ai-confidence";
 import { AICollectionSuggestion } from "./ai-collection-suggestion";
 import { AIObservations } from "./ai-observations";
 import { AITagSuggestions } from "./ai-tag-suggestions";
 import { AIFeedbackHistory } from "./ai-feedback-history";
 import { SourceBadge } from "./ui/source-badge";
+import { Button } from "./ui/button";
 import type { Asset } from "@/types";
 
 interface AIInsightPanelProps {
@@ -22,6 +24,28 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
   const assetFeedback = getAssetFeedback(asset.id);
   const collection = collections.find((c) => c.id === analysis.suggestedCollectionId);
 
+  const [streaming, setStreaming] = useState(false);
+  const [progressStep, setProgressStep] = useState<string | null>(null);
+  const [liveText, setLiveText] = useState("");
+
+  const runStreamingPreview = async () => {
+    setStreaming(true);
+    setProgressStep(null);
+    setLiveText("");
+    try {
+      await consumeAnalysisStream(
+        { assetId: asset.id },
+        {
+          onProgress: (step) => setProgressStep(step),
+          onChunk: (text) => setLiveText((prev) => prev + text),
+          onError: () => setLiveText("AI analysis preview failed — showing persisted analysis below."),
+        },
+      );
+    } finally {
+      setStreaming(false);
+    }
+  };
+
   useEffect(() => {
     markAIAssistedReview(asset.id);
   }, [asset.id, markAIAssistedReview]);
@@ -29,14 +53,38 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
   return (
     <div className="space-y-4">
       <div className="panel-ai">
+        {streaming && (
+          <div className="border-b border-border px-4 py-3" role="status" aria-live="polite">
+            <p className="section-title">
+              {progressStep ?? "Preparing analysis…"}
+            </p>
+            {liveText ? (
+              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-surface px-3 py-2 font-mono text-xs text-accent">
+                {liveText}
+              </pre>
+            ) : (
+              <p className="mt-1 text-xs text-muted">Streaming live AI analysis…</p>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <SourceBadge source="ai" />
-          <div>
+          <div className="flex-1">
             <h3 className="section-title">AI-Assisted Analysis</h3>
             <p className="text-xs text-accent">
               Simulated AI analysis — suggestions only; human review required
             </p>
           </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="text-xs"
+            onClick={() => void runStreamingPreview()}
+            disabled={streaming}
+          >
+            {streaming ? "Streaming…" : "Stream preview"}
+          </Button>
         </div>
         <div className="space-y-5 px-4 py-4">
           <div>
