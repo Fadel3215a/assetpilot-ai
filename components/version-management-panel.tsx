@@ -14,12 +14,13 @@ interface VersionManagementPanelProps {
 }
 
 export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
-  const { createAssetVersion, assets } = useAssets();
+  const { createAssetVersion, promoteVersion, deleteVersion, assets } = useAssets();
   const fileRef = useRef<HTMLInputElement>(null);
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
   const comparePartner = findComparisonPartner(assets, asset.id);
   const compareHref =
@@ -80,6 +81,53 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
                         {formatDate(v.createdAt)} · {formatFileSize(v.metadata.fileSize)} ·{" "}
                         {v.metadata.format}
                       </p>
+                      {confirmingDelete === v.id && (
+                        <p className="mt-2 text-xs text-status-danger">
+                          Delete v{v.versionNumber} and its uploaded file? This cannot be undone.
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!v.isCurrent && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => promoteVersion(asset.id, v.id)}
+                            className="text-xs font-medium text-accent transition-colors hover:text-accent/80"
+                          >
+                            Promote
+                          </button>
+                          {confirmingDelete === v.id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  deleteVersion(asset.id, v.id);
+                                  setConfirmingDelete(null);
+                                }}
+                                className="text-xs font-medium text-status-danger transition-colors hover:text-status-danger/80"
+                              >
+                                Confirm delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmingDelete(null)}
+                                className="text-xs text-muted transition-colors hover:text-foreground"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingDelete(v.id)}
+                              className="text-xs text-muted transition-colors hover:text-status-danger"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </li>

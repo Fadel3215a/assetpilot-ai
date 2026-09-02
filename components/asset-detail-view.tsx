@@ -20,6 +20,7 @@ import { ExtractedMetadataPanel } from "./extracted-metadata-panel";
 import { MetadataEditor } from "./metadata-editor";
 import { RelatedAssetsPanel } from "./related-assets-panel";
 import { VersionManagementPanel } from "./version-management-panel";
+import { VersionDiffViewer } from "./version-diff-viewer";
 import { QualityScoreDisplay } from "./quality-score-display";
 import { ReviewActions } from "./review-actions";
 import { DecisionHistoryPanel } from "./decision-history-panel";
@@ -215,6 +216,8 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
       <div id="version-management">
         <VersionManagementPanel asset={asset} />
       </div>
+
+      <VersionDiffViewer asset={asset} />
 
       <AssetActivityTimeline assetId={asset.id} />
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   getAsyncAIAnalysisProvider,
@@ -46,6 +46,7 @@ import type {
   ActivityItem,
   Asset,
   AssetAISessionState,
+  AssetVersion,
   ChecklistRating,
   Collection,
   ComparisonDecisionType,
@@ -234,6 +235,36 @@ async function persistUploadBytes(
 ): Promise<void> {
   await mkdir(STORAGE_ROOT, { recursive: true });
   await writeFile(path.join(STORAGE_ROOT, storedName), bytes);
+}
+
+/**
+ * Deletes the media files owned exclusively by a version. Uploaded originals are
+ * stored under STORAGE_ROOT as `{versionId}-{sanitizedFileName}`, so only files
+ * whose basename begins with the version id are ever removed. Shared per-asset
+ * rendition files (storage/uploads/renditions/...) are never touched because
+ * other versions may still reference them.
+ */
+async function removeVersionMedia(version: AssetVersion): Promise<void> {
+  const candidates = [version.mediaUrl, version.previewPath, version.thumbnailPath];
+  const targets = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!candidate || !candidate.startsWith("/media/")) continue;
+    const relative = candidate.slice("/media/".length);
+    if (relative.split(/[\\/]/).includes("renditions")) continue;
+
+    const absolute = path.resolve(STORAGE_ROOT, relative);
+    const storagePrefix = STORAGE_ROOT.endsWith(path.sep)
+      ? STORAGE_ROOT
+      : `${STORAGE_ROOT}${path.sep}`;
+    if (!absolute.startsWith(storagePrefix)) continue;
+
+    const basename = path.basename(absolute);
+    if (!basename.startsWith(`${version.id}-`)) continue;
+    targets.add(absolute);
+  }
+
+  await Promise.all([...targets].map((target) => unlink(target).catch(() => {})));
 }
 
 function nextVersionIdOf(asset: Asset): string {
@@ -1023,6 +1054,97 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
     }
     console.error("createAssetVersionAction failed", error);
     return { ok: false, error: "Could not create version." };
+  }
+}
+
+export async function promoteVersionAction(
+  assetId: string,
+  versionId: string,
+): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
+  try {
+    const asset = await withTransaction(async (tx) => {
+      const loaded = await loadAsset(tx, assetId);
+      if (!loaded) throw new Error("ASSET_NOT_FOUND");
+
+      const domain = loaded.domain;
+      const version = domain.versions.find((v) => v.id === versionId);
+      if (!version) throw new Error("VERSION_NOT_FOUND");
+      if (version.isCurrent) return domain;
+
+      const timestamp = nowIso();
+      domain.versions = domain.versions.map((v) => ({ ...v, isCurrent: v.id === versionId }));
+      domain.currentVersionId = versionId;
+      domain.updatedAt = timestamp;
+
+      const updated = recomputeProduction(domain);
+      await persistSnapshot(tx, updated);
+
+      await addActivity(tx, {
+        assetId,
+        assetName: updated.name,
+        action: `Version promoted: v${version.versionNumber} — ${version.label}`,
+        timestamp,
+        source: "curator",
+      });
+
+      return updated;
+    });
+
+    return { ok: true, asset };
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "ASSET_NOT_FOUND") return { ok: false, error: "Asset not found." };
+      if (error.message === "VERSION_NOT_FOUND") return { ok: false, error: "Version not found." };
+    }
+    console.error("promoteVersionAction failed", error);
+    return { ok: false, error: "Could not promote this version. Please try again." };
+  }
+}
+
+export async function deleteVersionAction(
+  assetId: string,
+  versionId: string,
+): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
+  try {
+    const asset = await withTransaction(async (tx) => {
+      const loaded = await loadAsset(tx, assetId);
+      if (!loaded) throw new Error("ASSET_NOT_FOUND");
+
+      const domain = loaded.domain;
+      const version = domain.versions.find((v) => v.id === versionId);
+      if (!version) throw new Error("VERSION_NOT_FOUND");
+      if (version.isCurrent) throw new Error("VERSION_IS_CURRENT");
+
+      const timestamp = nowIso();
+      domain.versions = domain.versions.filter((v) => v.id !== versionId);
+      domain.updatedAt = timestamp;
+
+      const updated = recomputeProduction(domain);
+      await persistSnapshot(tx, updated);
+      await removeVersionMedia(version);
+
+      await addActivity(tx, {
+        assetId,
+        assetName: updated.name,
+        action: `Version deleted: v${version.versionNumber} — ${version.label}`,
+        timestamp,
+        source: "curator",
+      });
+
+      return updated;
+    });
+
+    return { ok: true, asset };
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "ASSET_NOT_FOUND") return { ok: false, error: "Asset not found." };
+      if (error.message === "VERSION_NOT_FOUND") return { ok: false, error: "Version not found." };
+      if (error.message === "VERSION_IS_CURRENT") {
+        return { ok: false, error: "The current version cannot be deleted. Promote another version first." };
+      }
+    }
+    console.error("deleteVersionAction failed", error);
+    return { ok: false, error: "Could not delete this version. Please try again." };
   }
 }
 

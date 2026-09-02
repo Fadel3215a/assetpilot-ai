@@ -17,12 +17,14 @@ import {
   bulkMoveToCollectionAction,
   bulkRemoveTagAction,
   createAssetVersionAction,
+  deleteVersionAction,
   dismissObservationAction,
   dismissTagSuggestionAction,
   editTagSuggestionAction,
   fetchFeedAction,
   ignoreDuplicateAction,
   markAIAssistedReviewAction,
+  promoteVersionAction,
   resetDemoAction,
   submitComparisonAction,
   submitReviewAction,
@@ -133,6 +135,8 @@ interface AssetsContextValue {
     file: File | null,
     label: string,
   ) => Promise<{ ok: boolean; error?: string }>;
+  promoteVersion: (assetId: string, versionId: string) => void;
+  deleteVersion: (assetId: string, versionId: string) => void;
   ignoreDuplicate: (duplicateId: string) => void;
   getDuplicateCandidates: (assetId: string) => DuplicateCandidate[];
   getRelatedAssets: (assetId: string) => RelatedAsset[];
@@ -864,6 +868,77 @@ export function AssetsProvider({
     [assets, collections, registerObjectUrl, addActivity, restoreSnapshot, applyCanonicalAssets, reconcileFeed, takeSnapshot],
   );
 
+  const promoteVersion = useCallback(
+    (assetId: string, versionId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const version = asset.versions.find((v) => v.id === versionId);
+      if (!version || version.isCurrent) return;
+
+      const snapshot = takeSnapshot();
+
+      setAssets((prev) =>
+        prev.map((a) => {
+          if (a.id !== assetId) return a;
+          const versions = a.versions.map((v) => ({ ...v, isCurrent: v.id === versionId }));
+          return applyAIAndProduction({ ...a, versions, currentVersionId: versionId }, collections);
+        }),
+      );
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Version promoted: v${version.versionNumber} — ${version.label}`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+
+      runAction(
+        snapshot,
+        () => promoteVersionAction(assetId, versionId),
+        "Could not promote this version.",
+      );
+    },
+    [assets, collections, addActivity, runAction, takeSnapshot],
+  );
+
+  const deleteVersion = useCallback(
+    (assetId: string, versionId: string) => {
+      const asset = assets.find((a) => a.id === assetId);
+      if (!asset) return;
+      const version = asset.versions.find((v) => v.id === versionId);
+      if (!version || version.isCurrent) return;
+
+      const snapshot = takeSnapshot();
+
+      setAssets((prev) =>
+        prev.map((a) =>
+          a.id === assetId
+            ? applyAIAndProduction(
+                { ...a, versions: a.versions.filter((v) => v.id !== versionId) },
+                collections,
+              )
+            : a,
+        ),
+      );
+
+      addActivity({
+        assetId,
+        assetName: asset.name,
+        action: `Version deleted: v${version.versionNumber} — ${version.label}`,
+        timestamp: new Date().toISOString(),
+        source: "curator",
+      });
+
+      runAction(
+        snapshot,
+        () => deleteVersionAction(assetId, versionId),
+        "Could not delete this version.",
+      );
+    },
+    [assets, collections, addActivity, runAction, takeSnapshot],
+  );
+
   const ignoreDuplicate = useCallback(
     (duplicateId: string) => {
       const prevSet = ignoredDuplicates;
@@ -1269,6 +1344,8 @@ export function AssetsProvider({
       uploadAsset,
       updateAssetMetadata,
       createAssetVersion,
+      promoteVersion,
+      deleteVersion,
       ignoreDuplicate,
       getDuplicateCandidates,
       getRelatedAssets,
@@ -1307,6 +1384,8 @@ export function AssetsProvider({
       uploadAsset,
       updateAssetMetadata,
       createAssetVersion,
+      promoteVersion,
+      deleteVersion,
       ignoreDuplicate,
       getDuplicateCandidates,
       getRelatedAssets,

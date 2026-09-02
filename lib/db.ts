@@ -23,7 +23,14 @@ if (process.env.NODE_ENV !== "production") {
 export type TxClient = import("./generated/prisma/client").Prisma.TransactionClient;
 
 // Interactive transactions get generous budgets because hosted Postgres
-// (e.g. Neon) adds network latency to every statement.
-export async function withTransaction<T>(fn: (tx: TxClient) => Promise<T>): Promise<T> {
-  return prisma.$transaction(fn, { maxWait: 10_000, timeout: 120_000 });
+// (e.g. Neon) adds network latency to every statement. Heavy operations like
+// demo-data reset/seeding may pass a larger budget via the options argument.
+export async function withTransaction<T>(
+  fn: (tx: TxClient) => Promise<T>,
+  options?: { maxWait?: number; timeout?: number },
+): Promise<T> {
+  return prisma.$transaction(fn, {
+    maxWait: options?.maxWait ?? 10_000,
+    timeout: options?.timeout ?? 120_000,
+  });
 }
