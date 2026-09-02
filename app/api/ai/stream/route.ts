@@ -5,9 +5,10 @@ import {
   MODEL,
   buildAnalyzeContents,
   createGeminiClient,
+  createMediaPartsFromBuffer,
   extractJson,
   loadMediaParts,
-  loadMediaPartFromPath,
+  loadMediaPartsFromPath,
 } from "@/lib/ai/gemini-provider";
 import { generateAIAnalysis } from "@/lib/generate-ai-analysis";
 import { inferUploadCategory, mapCategoryToAssetType } from "@/lib/file-metadata";
@@ -31,7 +32,7 @@ type AnalyzeTarget =
       kind: "upload";
       asset: Asset;
       collections: Awaited<ReturnType<typeof getCollections>>;
-      mediaPart: Part | null;
+      mediaParts: Part[];
     };
 
 const encoder = new TextEncoder();
@@ -69,11 +70,7 @@ async function* geminiStream(target: AnalyzeTarget): AsyncGenerator<string> {
   yield sse("progress", { step: "Extracting keyframes..." });
 
   const mediaParts =
-    target.kind === "upload"
-      ? target.mediaPart
-        ? [target.mediaPart]
-        : []
-      : await loadMediaParts(target.asset);
+    target.kind === "upload" ? target.mediaParts : await loadMediaParts(target.asset);
 
   const contents = buildAnalyzeContents(target.asset, target.collections, mediaParts);
 
@@ -140,13 +137,17 @@ export async function POST(request: Request): Promise<Response> {
         isSessionUpload: false,
       });
 
-      // Pass the freshly-uploaded bytes straight to Gemini as inline media.
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const mediaPart: Part | null = file.size > 0
-        ? { inlineData: { data: bytesToBase64(bytes), mimeType: file.type || "application/octet-stream" } }
-        : await loadMediaPartFromPath(mediaPath);
+      // Pass the freshly-uploaded bytes straight to Gemini as inline media,
+      // reusing the same keyframe/spec extraction as persisted assets.
+      const fileBytes = new Uint8Array(await file.arrayBuffer());
+      const buffer = Buffer.from(fileBytes);
+      const ext = file.name ? `.${file.name.split(".").pop()?.toLowerCase()}` : "";
+      const mediaParts =
+        file.size > 0
+          ? createMediaPartsFromBuffer(buffer, ext)
+          : await loadMediaPartsFromPath(mediaPath);
 
-      target = { kind: "upload", asset, collections, mediaPart };
+      target = { kind: "upload", asset, collections, mediaParts };
     } else {
       let assetId: string;
       try {
@@ -212,12 +213,4 @@ export async function POST(request: Request): Promise<Response> {
       headers: { "content-type": "application/json" },
     });
   }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }

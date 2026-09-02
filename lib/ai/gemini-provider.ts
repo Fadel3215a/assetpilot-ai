@@ -12,6 +12,13 @@ import {
   generateAIAnalysis,
   generateComparisonSummary,
 } from "@/lib/generate-ai-analysis";
+import {
+  MAX_INLINE_AUDIO_BYTES_CAP,
+  parseMp3,
+  parseMp4,
+  parseWav,
+  parseWebm,
+} from "@/lib/media-processing";
 import { getCurrentVersion } from "@/lib/utils";
 import type { AIAnalysis, AIComparisonSummary, Asset, Collection } from "@/types";
 import type { AsyncAIAnalysisProvider } from "./types";
@@ -44,11 +51,88 @@ function resolveLocalMediaPath(mediaUrl: string): string | null {
 }
 
 /**
- * Loads an asset's on-disk media (image, audio, or video) as Gemini inline
- * data parts. Only files under `storage/uploads/` referenced via `/media/`
- * are considered; static mock thumbnails (e.g. SVG placeholders) are skipped.
- * Returns an empty array when nothing usable is on disk, letting the caller
- * fall back to metadata-only analysis.
+ * Builds the Gemini `Part[]` payload for a raw media buffer, keyed by file
+ * extension. Images pass through as a single inline-data part. Videos are
+ * parsed for a technical specs text part plus up to 3 representative
+ * keyframe sample parts (.mp4 sync samples / .webm keyframe blocks). Audio
+ * is parsed for a structured specs part (sample rate, bitrate, duration,
+ * channel topology) alongside a size-capped inline audio part. Any parsing
+ * failure falls back to the whole-file inline part so requests never degrade.
+ */
+export function createMediaPartsFromBuffer(buffer: Buffer, ext: string): Part[] {
+  const mimeType = MIME_BY_EXTENSION[ext];
+  if (!mimeType) return [];
+  const fallback = (): Part[] => [createPartFromBase64(buffer.toString("base64"), mimeType)];
+
+  if (ext === ".mp4" || ext === ".webm") {
+    const video = ext === ".mp4" ? parseMp4(buffer) : parseWebm(buffer);
+    if (!video) return fallback();
+    const parts: Part[] = [
+      {
+        text: JSON.stringify({
+          technical: {
+            container: video.kind,
+            durationSeconds: video.durationSeconds,
+            width: video.width,
+            height: video.height,
+            resolution: `${video.width}x${video.height}`,
+            sampleCount: video.sampleCount,
+            codec: video.codec ?? null,
+            keyframeCount: video.keyframeSamples.length,
+          },
+          note: "Representative keyframe samples follow as inline video parts. " +
+            "Use the technical metadata for duration/dimensions; frames may lack container context.",
+        }),
+      },
+    ];
+    for (const kf of video.keyframeSamples) {
+      parts.push(createPartFromBase64(kf.data.toString("base64"), mimeType));
+    }
+    return parts;
+  }
+
+  if (ext === ".mp3" || ext === ".wav") {
+    const audio = ext === ".mp3" ? parseMp3(buffer) : parseWav(buffer);
+    const parts: Part[] = [
+      {
+        text: JSON.stringify(
+          audio
+            ? {
+                technical: {
+                  container: audio.kind,
+                  durationSeconds: audio.durationSeconds,
+                  sampleRate: audio.sampleRate,
+                  bitrateKbps: audio.bitrateKbps,
+                  channels: audio.channels,
+                  channelTopology: audio.channelTopology,
+                  codec: audio.codec,
+                },
+                note: "Audio specs were parsed from the container; the inline audio part follows.",
+              }
+            : {
+                technical: { container: ext.slice(1), codec: "unknown" },
+                note: "Container parse failed; only the inline audio part is available.",
+              },
+        ),
+      },
+    ];
+    const slice =
+      buffer.length <= MAX_INLINE_AUDIO_BYTES_CAP
+        ? buffer
+        : buffer.subarray(0, MAX_INLINE_AUDIO_BYTES_CAP);
+    parts.push(createPartFromBase64(slice.toString("base64"), mimeType));
+    return parts;
+  }
+
+  return fallback();
+}
+
+/**
+ * Loads an asset's on-disk media (image, audio, or video) as Gemini parts.
+ * Only files under `storage/uploads/` referenced via `/media/` are considered;
+ * static mock thumbnails (e.g. SVG placeholders) are skipped. Returns an empty
+ * array when nothing usable is on disk, letting the caller fall back to
+ * metadata-only analysis.
  */
 export async function loadMediaParts(asset: Asset): Promise<Part[]> {
   const version = getCurrentVersion(asset);
@@ -58,32 +142,32 @@ export async function loadMediaParts(asset: Asset): Promise<Part[]> {
   const target = resolveLocalMediaPath(mediaUrl);
   if (!target) return [];
 
-  const mimeType = MIME_BY_EXTENSION[path.extname(target).toLowerCase()];
-  if (!mimeType) return [];
+  const ext = path.extname(target).toLowerCase();
+  if (!MIME_BY_EXTENSION[ext]) return [];
 
   try {
     const buffer = await readFile(target);
-    return [createPartFromBase64(buffer.toString("base64"), mimeType)];
+    return createMediaPartsFromBuffer(buffer, ext);
   } catch {
     return [];
   }
 }
 
 /**
- * Reads a file's raw bytes from the local `/media/` tree as an inline-data
- * part. Used to attach a freshly-written upload to a streaming Gemini request
+ * Reads a file's raw bytes from the local `/media/` tree as Gemini parts.
+ * Used to attach a freshly-written upload to a streaming Gemini request
  * before a canonical asset record exists on disk under that version id.
  */
-export async function loadMediaPartFromPath(mediaPath: string): Promise<Part | null> {
+export async function loadMediaPartsFromPath(mediaPath: string): Promise<Part[]> {
   const target = resolveLocalMediaPath(mediaPath);
-  if (!target) return null;
-  const mimeType = MIME_BY_EXTENSION[path.extname(target).toLowerCase()];
-  if (!mimeType) return null;
+  if (!target) return [];
+  const ext = path.extname(target).toLowerCase();
+  if (!MIME_BY_EXTENSION[ext]) return [];
   try {
     const buffer = await readFile(target);
-    return createPartFromBase64(buffer.toString("base64"), mimeType);
+    return createMediaPartsFromBuffer(buffer, ext);
   } catch {
-    return null;
+    return [];
   }
 }
 
