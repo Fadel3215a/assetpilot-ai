@@ -17,6 +17,9 @@ export function toJsonInput<T>(value: T): JsonInput {
 export const DEFAULT_SESSION_STATE = {
   dismissedTagIds: [],
   dismissedObservationIds: [],
+  acceptedTagIds: [],
+  acceptedObservationIds: [],
+  collectionOverrides: [],
   aiAssistedReview: false,
 };
 

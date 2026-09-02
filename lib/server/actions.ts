@@ -160,6 +160,46 @@ async function enrich(domain: Asset, collections: Collection[]): Promise<Asset> 
   return updated;
 }
 
+/**
+ * Recomputes curator quality scores and production readiness for an asset,
+ * returning a copy with updated version qualityScore/curatorScore and a fresh
+ * productionReadiness. Tags/metadata changes (or explicit re-evaluation) can
+ * move assets in/out of the production-ready set, so HITL decisions and bulk
+ * operations must call this before persisting the snapshot.
+ */
+function recomputeProduction(domain: Asset): Asset {
+  const updated: Asset = {
+    ...domain,
+    versions: domain.versions.map((version) => {
+      if (!version.curatorChecklist) return version;
+      const curatorScore = calculateCuratorScore(version.curatorChecklist);
+      return {
+        ...version,
+        curatorScore,
+        qualityScore: { ...version.qualityScore, overall: curatorScore },
+      };
+    }),
+  };
+
+  const prod = evaluateProductionCriteria(updated);
+  updated.productionReadiness = {
+    score: prod.score,
+    checklist: prod.items.map((i) => ({
+      id: i.id,
+      label: i.label,
+      completed: i.completed,
+    })),
+    readyAt: prod.ready
+      ? (updated.productionReadiness.readyAt ?? updated.updatedAt)
+      : undefined,
+  };
+  return updated;
+}
+
+function uniqueConcat(existing: string[], next: string[]): string[] {
+  return Array.from(new Set([...existing, ...next]));
+}
+
 function reviewActionLabel(action: ReviewAction): string {
   switch (action) {
     case "APPROVED":
@@ -427,7 +467,8 @@ export async function acceptTagSuggestionAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain, aiSessionState } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const suggestion = domain.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return { ok: false, error: "Suggestion not found." };
@@ -436,9 +477,12 @@ export async function acceptTagSuggestionAction(
         domain.tags = [...domain.tags, suggestion.tag];
       }
 
+      domain = recomputeProduction(domain);
+
       const session: AssetAISessionState = {
         ...aiSessionState,
-        dismissedTagIds: [...aiSessionState.dismissedTagIds, tagId],
+        acceptedTagIds: uniqueConcat(aiSessionState.acceptedTagIds, [tagId]),
+        dismissedTagIds: uniqueConcat(aiSessionState.dismissedTagIds, [tagId]),
       };
 
       await persistSnapshot(tx, domain);
@@ -480,7 +524,8 @@ export async function editTagSuggestionAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain, aiSessionState } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const suggestion = domain.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return { ok: false, error: "Suggestion not found." };
@@ -489,9 +534,12 @@ export async function editTagSuggestionAction(
         domain.tags = [...domain.tags, trimmed];
       }
 
+      domain = recomputeProduction(domain);
+
       const session: AssetAISessionState = {
         ...aiSessionState,
-        dismissedTagIds: [...aiSessionState.dismissedTagIds, tagId],
+        acceptedTagIds: uniqueConcat(aiSessionState.acceptedTagIds, [tagId]),
+        dismissedTagIds: uniqueConcat(aiSessionState.dismissedTagIds, [tagId]),
       };
 
       await persistSnapshot(tx, domain);
@@ -508,7 +556,7 @@ export async function editTagSuggestionAction(
       await addActivity(tx, {
         assetId,
         assetName: domain.name,
-        action: `Curator edited tag: "${suggestion.tag}" → "${trimmed}"`,
+        action: `Curator edited tag: "${suggestion.tag}" â†’ "${trimmed}"`,
         timestamp: nowIso(),
         source: "curator",
       });
@@ -529,16 +577,19 @@ export async function dismissTagSuggestionAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain, aiSessionState } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const suggestion = domain.aiAnalysis.suggestedTags.find((t) => t.id === tagId);
       if (!suggestion) return { ok: false, error: "Suggestion not found." };
 
       const session: AssetAISessionState = {
         ...aiSessionState,
-        dismissedTagIds: [...aiSessionState.dismissedTagIds, tagId],
+        dismissedTagIds: uniqueConcat(aiSessionState.dismissedTagIds, [tagId]),
       };
 
+      domain = recomputeProduction(domain);
+      await persistSnapshot(tx, domain);
       await updateSessionState(tx, assetId, session);
 
       const feedback = await addFeedback(tx, {
@@ -572,13 +623,21 @@ export async function acceptCollectionSuggestionAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const collectionRow = await tx.collection.findUnique({ where: { id: collectionId } });
       if (!collectionRow) return { ok: false, error: "Collection not found." };
 
       domain.collectionId = collectionId;
+      domain = recomputeProduction(domain);
       await persistSnapshot(tx, domain);
+
+      const session: AssetAISessionState = {
+        ...aiSessionState,
+        collectionOverrides: uniqueConcat(aiSessionState.collectionOverrides, [collectionId]),
+      };
+      await updateSessionState(tx, assetId, session);
 
       const feedback = await addFeedback(tx, {
         assetId,
@@ -612,16 +671,23 @@ export async function acceptObservationAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain, aiSessionState } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const obs = domain.aiAnalysis.observations.find((o) => o.id === observationId);
       if (!obs) return { ok: false, error: "Observation not found." };
 
       const session: AssetAISessionState = {
         ...aiSessionState,
-        dismissedObservationIds: [...aiSessionState.dismissedObservationIds, observationId],
+        acceptedObservationIds: uniqueConcat(aiSessionState.acceptedObservationIds, [observationId]),
+        dismissedObservationIds: uniqueConcat(
+          aiSessionState.dismissedObservationIds,
+          [observationId],
+        ),
       };
 
+      domain = recomputeProduction(domain);
+      await persistSnapshot(tx, domain);
       await updateSessionState(tx, assetId, session);
 
       const feedback = await addFeedback(tx, {
@@ -656,16 +722,22 @@ export async function dismissObservationAction(
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
-      const { domain, aiSessionState } = loaded;
+      const { domain: initialDomain, aiSessionState } = loaded;
+      let domain = initialDomain;
 
       const obs = domain.aiAnalysis.observations.find((o) => o.id === observationId);
       if (!obs) return { ok: false, error: "Observation not found." };
 
       const session: AssetAISessionState = {
         ...aiSessionState,
-        dismissedObservationIds: [...aiSessionState.dismissedObservationIds, observationId],
+        dismissedObservationIds: uniqueConcat(
+          aiSessionState.dismissedObservationIds,
+          [observationId],
+        ),
       };
 
+      domain = recomputeProduction(domain);
+      await persistSnapshot(tx, domain);
       await updateSessionState(tx, assetId, session);
 
       const feedback = await addFeedback(tx, {
@@ -932,7 +1004,6 @@ export async function bulkAddTagAction(
 
   try {
     const assets = await withTransaction(async (tx) => {
-      const collections = await loadCollectionsTx(tx);
       const timestamp = nowIso();
       const touched: Asset[] = [];
 
@@ -941,10 +1012,17 @@ export async function bulkAddTagAction(
         if (!loaded) continue;
         let domain = loaded.domain;
         if (!domain.tags.includes(trimmed)) {
-          domain = { ...domain, tags: [...domain.tags, trimmed], updatedAt: timestamp };
-          domain = await enrich(domain, collections);
+          domain = {
+            ...domain,
+            tags: [...domain.tags, trimmed],
+            updatedAt: timestamp,
+          };
+          domain = recomputeProduction(domain);
           await persistSnapshot(tx, domain);
         }
+        // Re-evaluate readiness is above; sync the asset's session state so
+        // accepted/dismissed tracking remains intact after the bulk change.
+        await updateSessionState(tx, id, loaded.aiSessionState);
         touched.push(domain);
 
         await addActivity(tx, {
@@ -970,7 +1048,6 @@ export async function bulkRemoveTagAction(
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
     const assets = await withTransaction(async (tx) => {
-      const collections = await loadCollectionsTx(tx);
       const timestamp = nowIso();
       const touched: Asset[] = [];
 
@@ -984,9 +1061,12 @@ export async function bulkRemoveTagAction(
             tags: domain.tags.filter((t) => t !== tag),
             updatedAt: timestamp,
           };
-          domain = await enrich(domain, collections);
+          domain = recomputeProduction(domain);
           await persistSnapshot(tx, domain);
         }
+        // Re-evaluate readiness is above; sync the asset's session state so
+        // accepted/dismissed tracking remains intact after the bulk change.
+        await updateSessionState(tx, id, loaded.aiSessionState);
         touched.push(domain);
       }
       return touched;
@@ -1004,7 +1084,6 @@ export async function bulkMoveToCollectionAction(
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
     const assets = await withTransaction(async (tx) => {
-      const collections = await loadCollectionsTx(tx);
       const collectionRow = await tx.collection.findUnique({ where: { id: collectionId } });
       const timestamp = nowIso();
       const touched: Asset[] = [];
@@ -1014,8 +1093,11 @@ export async function bulkMoveToCollectionAction(
         if (!loaded) continue;
         let domain = loaded.domain;
         domain = { ...domain, collectionId, updatedAt: timestamp };
-        domain = await enrich(domain, collections);
+        domain = recomputeProduction(domain);
         await persistSnapshot(tx, domain);
+        // Re-evaluate readiness is above; sync the asset's session state so
+        // collection overrides remain intact after the bulk move.
+        await updateSessionState(tx, id, loaded.aiSessionState);
         touched.push(domain);
 
         if (collectionRow) {

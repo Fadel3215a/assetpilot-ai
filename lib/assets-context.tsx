@@ -166,6 +166,9 @@ const CURATOR = "Alex Chen";
 const defaultSession = (): AssetAISessionState => ({
   dismissedTagIds: [],
   dismissedObservationIds: [],
+  acceptedTagIds: [],
+  acceptedObservationIds: [],
+  collectionOverrides: [],
   aiAssistedReview: false,
 });
 
@@ -413,6 +416,7 @@ export function AssetsProvider({
         ...prev,
         [assetId]: {
           ...(prev[assetId] ?? defaultSession()),
+          acceptedTagIds: [...(prev[assetId]?.acceptedTagIds ?? []), tagId],
           dismissedTagIds: [...(prev[assetId]?.dismissedTagIds ?? []), tagId],
         },
       }));
@@ -465,6 +469,7 @@ export function AssetsProvider({
         ...prev,
         [assetId]: {
           ...(prev[assetId] ?? defaultSession()),
+          acceptedTagIds: [...(prev[assetId]?.acceptedTagIds ?? []), tagId],
           dismissedTagIds: [...(prev[assetId]?.dismissedTagIds ?? []), tagId],
         },
       }));
@@ -546,6 +551,17 @@ export function AssetsProvider({
       setAssets((prev) =>
         prev.map((a) => (a.id === assetId ? { ...a, collectionId } : a)),
       );
+
+      setAiSessions((prev) => ({
+        ...prev,
+        [assetId]: {
+          ...(prev[assetId] ?? defaultSession()),
+          collectionOverrides: [
+            ...(prev[assetId]?.collectionOverrides ?? []),
+            collectionId,
+          ],
+        },
+      }));
 
       addFeedback({
         assetId,
@@ -629,6 +645,10 @@ export function AssetsProvider({
         ...prev,
         [assetId]: {
           ...(prev[assetId] ?? defaultSession()),
+          acceptedObservationIds: [
+            ...(prev[assetId]?.acceptedObservationIds ?? []),
+            observationId,
+          ],
           dismissedObservationIds: [
             ...(prev[assetId]?.dismissedObservationIds ?? []),
             observationId,

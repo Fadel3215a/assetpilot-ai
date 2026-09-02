@@ -275,7 +275,14 @@ export function parseAIAnalysis(value: unknown): AIAnalysis {
 
 export function parseSessionState(value: unknown): AssetAISessionState {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return { dismissedTagIds: [], dismissedObservationIds: [], aiAssistedReview: false };
+    return {
+      dismissedTagIds: [],
+      dismissedObservationIds: [],
+      acceptedTagIds: [],
+      acceptedObservationIds: [],
+      collectionOverrides: [],
+      aiAssistedReview: false,
+    };
   }
   const rec = value as Record<string, unknown>;
   try {
@@ -285,10 +292,26 @@ export function parseSessionState(value: unknown): AssetAISessionState {
         rec.dismissedObservationIds ?? [],
         "aiSessionState.dismissedObservationIds",
       ),
+      acceptedTagIds: stringArray(rec.acceptedTagIds ?? [], "aiSessionState.acceptedTagIds"),
+      acceptedObservationIds: stringArray(
+        rec.acceptedObservationIds ?? [],
+        "aiSessionState.acceptedObservationIds",
+      ),
+      collectionOverrides: stringArray(
+        rec.collectionOverrides ?? [],
+        "aiSessionState.collectionOverrides",
+      ),
       aiAssistedReview: rec.aiAssistedReview === true,
     };
   } catch {
-    return { dismissedTagIds: [], dismissedObservationIds: [], aiAssistedReview: false };
+    return {
+      dismissedTagIds: [],
+      dismissedObservationIds: [],
+      acceptedTagIds: [],
+      acceptedObservationIds: [],
+      collectionOverrides: [],
+      aiAssistedReview: false,
+    };
   }
 }
 

@@ -60,6 +60,9 @@ export interface CuratorFeedbackEntry {
 export interface AssetAISessionState {
   dismissedTagIds: string[];
   dismissedObservationIds: string[];
+  acceptedTagIds: string[];
+  acceptedObservationIds: string[];
+  collectionOverrides: string[];
   aiAssistedReview: boolean;
 }
 
