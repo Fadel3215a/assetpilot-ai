@@ -3,6 +3,7 @@ import { collections } from "@/data/collections";
 import { mockActivity, rawMockAssets } from "@/data/mock-assets";
 import { mockComparisons } from "@/data/mock-comparisons";
 import { withTransaction } from "@/lib/db";
+import { indexCollection } from "@/lib/search";
 import { parseSessionState } from "@/lib/server/mappers";
 import {
   activityToRow,
@@ -18,6 +19,7 @@ export async function resetDemoData(): Promise<void> {
   // single interactive transaction. Against remote Postgres (e.g. Neon) the
   // per-statement network latency can exceed the default 120s budget, so the
   // reset runs with a generous timeout to allow the operation to complete.
+  let seededAssets: ReturnType<typeof enrichMockAssets> = [];
   await withTransaction(
     async (tx) => {
       await tx.curatorFeedbackEntry.deleteMany();
@@ -33,7 +35,7 @@ export async function resetDemoData(): Promise<void> {
         data: collections.map((c) => ({ ...c })),
       });
 
-      const seededAssets = enrichMockAssets(rawMockAssets);
+      seededAssets = enrichMockAssets(rawMockAssets);
       for (const asset of seededAssets) {
         await tx.asset.create({
           data: {
@@ -63,4 +65,8 @@ export async function resetDemoData(): Promise<void> {
     },
     { timeout: 300_000 },
   );
+
+  // Hybrid search index (embedding + searchText) for the restored inventory,
+  // computed after the transaction commits so the asset rows exist.
+  await indexCollection(seededAssets, collections);
 }

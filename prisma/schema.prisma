@@ -116,8 +116,21 @@ model Asset {
   decisionHistory DecisionHistoryEntry[]
   feedback        CuratorFeedbackEntry[]
 
+  // Hybrid search (Stage 4.1): semantic vector embedding for cosine similarity
+  // (pgvector `<=>`), plus denormalized searchable text for PostgreSQL
+  // full-text search (to_tsvector / to_tsquery). Both are written/updated by
+  // lib/search.ts; searchText has a tsvector GIN index created manually (Prisma
+  // cannot express a functional index over an expression in schema).
+  // 1536 dims: gemini-embedding-001 emits 3072, but pgvector's HNSW/IVFFlat
+  // caps at 2000 dims, so lib/search.ts down-projects to the first 1536
+  // components — small enough for an HNSW index (vector_cosine_ops) and still
+  // semantically meaningful.
+  embedding Unsupported("vector(1536)")?
+  searchText String?
+
   @@index([collectionId])
   @@index([status])
+  @@index([searchText])
 }
 
 model AssetVersion {

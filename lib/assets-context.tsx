@@ -31,6 +31,7 @@ import {
   updateAssetMetadataAction,
   updateCuratorChecklistAction,
   uploadAssetAction,
+  searchAssetsAction,
 } from "@/lib/server/actions";
 import { applyAIAndProduction, useObjectUrlRegistry } from "@/lib/object-url-registry";
 import { buildAssetTimeline } from "@/lib/asset-timeline";
@@ -65,6 +66,7 @@ import type {
   QualityCriterion,
   RelatedAsset,
   ReviewDecisionType,
+  AssetSearchHit,
 } from "@/types";
 
 export type ReviewAction = "APPROVED" | "REJECTED" | "CHANGES_REQUESTED";
@@ -142,6 +144,10 @@ interface AssetsContextValue {
   getRelatedAssets: (assetId: string) => RelatedAsset[];
   getAssetHealth: (assetId: string) => AssetHealth | null;
   getAssetTimeline: (assetId: string) => AssetTimelineEntry[];
+  searchAssets: (
+    query: string,
+    limit?: number,
+  ) => Promise<{ ok: boolean; error?: string; assets?: Asset[]; hits?: AssetSearchHit[] }>;
   bulkAddTag: (assetIds: string[], tag: string) => void;
   bulkRemoveTag: (assetIds: string[], tag: string) => void;
   bulkMoveToCollection: (assetIds: string[], collectionId: string) => void;
@@ -755,6 +761,23 @@ export function AssetsProvider({
     [collections, registerObjectUrl, addActivity, restoreSnapshot, reconcileFeed, takeSnapshot],
   );
 
+  const searchAssets = useCallback(
+    async (query: string, limit?: number) => {
+      const trimmed = query.trim();
+      if (!trimmed) return { ok: true as const, assets: [] as Asset[], hits: [] as AssetSearchHit[] };
+      try {
+        const res = await searchAssetsAction(trimmed, limit ?? 12);
+        if (!res.ok || !res.assets) {
+          return { ok: false as const, error: res.error ?? "Could not search assets." };
+        }
+        return { ok: true as const, assets: res.assets, hits: res.hits };
+      } catch {
+        return { ok: false as const, error: "Could not search assets." };
+      }
+    },
+    [],
+  );
+
   const updateAssetMetadata = useCallback(
     (assetId: string, payload: MetadataEditPayload) => {
       const asset = assets.find((a) => a.id === assetId);
@@ -1351,6 +1374,7 @@ export function AssetsProvider({
       getRelatedAssets,
       getAssetHealth,
       getAssetTimeline,
+      searchAssets,
       bulkAddTag,
       bulkRemoveTag,
       bulkMoveToCollection,
@@ -1391,6 +1415,7 @@ export function AssetsProvider({
       getRelatedAssets,
       getAssetHealth,
       getAssetTimeline,
+      searchAssets,
       bulkAddTag,
       bulkRemoveTag,
       bulkMoveToCollection,

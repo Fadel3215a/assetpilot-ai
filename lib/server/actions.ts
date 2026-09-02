@@ -17,6 +17,7 @@ import {
   type RenditionPaths,
 } from "@/lib/renditions";
 import { statusFromDecision } from "@/lib/utils";
+import { indexAsset, searchAssets } from "@/lib/search";
 import {
   parseExtractedMetadata,
   parseSessionState,
@@ -36,6 +37,7 @@ import {
 import { resetDemoData } from "@/lib/server/reset-demo";
 import {
   getActivity,
+  getAssetById,
   getAssets,
   getCollections as fetchCollections,
   getComparisons,
@@ -46,6 +48,7 @@ import type {
   ActivityItem,
   Asset,
   AssetAISessionState,
+  AssetSearchHit,
   AssetVersion,
   ChecklistRating,
   Collection,
@@ -908,6 +911,10 @@ export async function uploadAssetAction(formData: FormData): Promise<{
       return domain;
     });
 
+    // Keep the hybrid search index in sync with the new asset.
+    const uploadCollection = collections.find((c) => c.id === domain.collectionId);
+    await indexAsset(domain, uploadCollection?.name);
+
     return { ok: true, assetId: domain.id, asset: domain };
   } catch (error) {
     console.error("uploadAssetAction failed", error);
@@ -1011,10 +1018,12 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
       : null;
 
     let resultAsset: Asset | undefined;
+    let versionCollections: Collection[] = [];
     await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
       const collections = await loadCollectionsTx(tx);
+      versionCollections = collections;
 
       let objectUrl: string | null = null;
       let updated: Asset;
@@ -1046,6 +1055,15 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
       });
       resultAsset = updated;
     });
+
+    // The current version's metadata feeds the hybrid search index, so refresh
+    // it whenever a new version is created.
+    if (resultAsset) {
+      const versionCollection = versionCollections.find(
+        (c) => c.id === resultAsset?.collectionId,
+      );
+      await indexAsset(resultAsset, versionCollection?.name);
+    }
 
     return { ok: true, asset: resultAsset };
   } catch (error) {
@@ -1340,5 +1358,46 @@ export async function fetchFeedAction(): Promise<{
   } catch (error) {
     console.error("fetchFeedAction failed", error);
     return { ok: false, error: "Could not refresh recent activity." };
+  }
+}
+
+/**
+ * Hybrid vector + full-text search over the asset inventory. Returns the
+ * matching assets (full domain objects, including versions and decision
+ * history) ordered by descending hybrid confidence, together with the raw
+ * hit metrics so the UI can show why each asset matched.
+ */
+export async function searchAssetsAction(
+  query: string,
+  limit = 12,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  assets?: Asset[];
+  hits?: AssetSearchHit[];
+}> {
+  const trimmed = query.trim();
+  if (!trimmed) return { ok: true, assets: [], hits: [] };
+
+  try {
+    const hits = await searchAssets(trimmed, limit);
+    if (hits.length === 0) return { ok: true, assets: [], hits: [] };
+
+    const assets: Asset[] = [];
+    for (const hit of hits) {
+      const asset = await getAssetById(hit.assetId);
+      if (asset) assets.push(asset);
+    }
+
+    // Ensure the returned assets mirror the ranked hit order.
+    const byId = new Map(assets.map((a) => [a.id, a]));
+    const ordered = hits
+      .map((h) => byId.get(h.assetId))
+      .filter((a): a is Asset => Boolean(a));
+
+    return { ok: true, assets: ordered, hits };
+  } catch (error) {
+    console.error("searchAssetsAction failed", error);
+    return { ok: false, error: "Could not search assets. Please try again." };
   }
 }

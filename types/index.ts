@@ -12,6 +12,8 @@ export type {
   UploadCategory,
 } from "./media";
 
+export type { AssetSearchHit, AssetSearchResult, IndexedAssetLike } from "./search";
+
 export type {
   AIAnalysis,
   AIAssistanceStats,
