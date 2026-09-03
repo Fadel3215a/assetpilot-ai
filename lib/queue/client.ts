@@ -69,6 +69,17 @@ export function getQueueConnection(): ConnectionOptions & RedisOptions {
   };
 }
 
+/**
+ * Connection for worker processes: real options when Redis is configured so
+ * jobs actually run, otherwise the mock so the worker module can be instantiated
+ * safely in environments without a broker.
+ */
+export function getWorkerConnection(): ConnectionOptions & RedisOptions {
+  return isRedisConfigured()
+    ? getQueueConnection()
+    : (new MockRedisConnection() as unknown as ConnectionOptions & RedisOptions);
+}
+
 const globalForRedis = globalThis as unknown as { assetpilotRedis?: Redis };
 
 /** Lazily-created shared ioredis instance for direct Redis access. */
@@ -146,7 +157,9 @@ export class MockRedisConnection extends EventEmitter {
     return `mock:${this.keyPrefix}`;
   }
 
-  get options(): { keyPrefix: string } {
-    return { keyPrefix: this.keyPrefix };
+  get options(): { keyPrefix: "" } {
+    // An empty prefix so BullMQ never mistakes the mock for a prefixed ioredis
+    // client (which it explicitly rejects).
+    return { keyPrefix: "" };
   }
 }
