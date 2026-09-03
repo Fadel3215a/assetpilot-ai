@@ -18,6 +18,8 @@ import {
 } from "@/lib/renditions";
 import { statusFromDecision } from "@/lib/utils";
 import { indexAsset, searchAssets } from "@/lib/search";
+import { evaluateCurationRules, type CurationEvaluation } from "@/lib/curation-rules";
+import { buildExportZip } from "@/lib/export";
 import {
   parseExtractedMetadata,
   parseSessionState,
@@ -206,6 +208,32 @@ function recomputeProduction(domain: Asset): Asset {
   return updated;
 }
 
+/**
+ * Stage 4.2 — Automated curation rules gate.
+ *
+ * Evaluates the asset against the automated rules (quality > 85, zero unresolved
+ * observations, mandatory checklist cleared). When all rules pass and the asset
+ * is not explicitly rejected / awaiting changes, it is auto-promoted to
+ * PRODUCTION_READY. Returns whether a promotion occurred (and the evaluation)
+ * so callers can log an activity entry.
+ *
+ * Mutates the passed-in copy (callers own the object), consistent with the rest
+ * of the action helpers.
+ */
+function runCurationRules(
+  domain: Asset,
+  session: AssetAISessionState,
+): { domain: Asset; evaluation: CurationEvaluation; promoted: boolean } {
+  const evaluation = evaluateCurationRules(domain, session);
+  const excluded = domain.status === "REJECTED" || domain.status === "CHANGES_REQUESTED";
+  const promoted = evaluation.ready && !excluded && domain.status !== "PRODUCTION_READY";
+  if (promoted) {
+    domain.status = "PRODUCTION_READY";
+    domain.updatedAt = nowIso();
+  }
+  return { domain, evaluation, promoted };
+}
+
 function uniqueConcat(existing: string[], next: string[]): string[] {
   return Array.from(new Set([...existing, ...next]));
 }
@@ -364,8 +392,19 @@ export async function submitReviewAction(
         readyAt: prod.ready ? timestamp : undefined,
       };
 
-      if (prod.ready && action === "APPROVED") {
-        domain.status = "PRODUCTION_READY";
+      // Automated curation rules gate: on an APPROVED review, promote only when
+      // the objective rules (quality > 85, no unresolved observations, mandatory
+      // checklist cleared) all pass. This is stricter than generic readiness.
+      let curationPromoted = false;
+      if (action === "APPROVED") {
+        const result = runCurationRules(domain, loaded.aiSessionState);
+        curationPromoted = result.promoted;
+        if (curationPromoted) {
+          domain.productionReadiness = {
+            ...domain.productionReadiness,
+            readyAt: timestamp,
+          };
+        }
       }
 
       await persistSnapshot(tx, domain);
@@ -376,6 +415,15 @@ export async function submitReviewAction(
         timestamp,
         source: "curator",
       });
+      if (curationPromoted) {
+        await addActivity(tx, {
+          assetId,
+          assetName: domain.name,
+          action: "Auto-promoted to production ready (curation rules)",
+          timestamp,
+          source: "curator",
+        });
+      }
 
       return domain;
     });
@@ -961,6 +1009,16 @@ export async function updateAssetMetadataAction(
       };
 
       domain = await enrich(domain, collections);
+
+      // Automated curation rules gate: an edit that satisfies the objective
+      // rules (quality > 85, no unresolved observations, mandatory checklist
+      // cleared) can auto-promote an otherwise-eligible asset.
+      let curationPromoted = false;
+      {
+        const result = runCurationRules(domain, loaded.aiSessionState);
+        curationPromoted = result.promoted;
+      }
+
       await persistSnapshot(tx, domain);
 
       await addActivity(tx, {
@@ -970,6 +1028,15 @@ export async function updateAssetMetadataAction(
         timestamp,
         source: "curator",
       });
+      if (curationPromoted) {
+        await addActivity(tx, {
+          assetId,
+          assetName: payload.name,
+          action: "Auto-promoted to production ready (curation rules)",
+          timestamp,
+          source: "curator",
+        });
+      }
 
       return domain;
     });
@@ -1212,6 +1279,20 @@ export async function bulkAddTagAction(
           timestamp,
           source: "curator",
         });
+
+        // Automated curation rules gate: a tag change can move an asset into
+        // the automatic production-ready set.
+        const curation = runCurationRules(domain, loaded.aiSessionState);
+        if (curation.promoted) {
+          await persistSnapshot(tx, curation.domain);
+          await addActivity(tx, {
+            assetId: id,
+            assetName: curation.domain.name,
+            action: "Auto-promoted to production ready (curation rules)",
+            timestamp,
+            source: "curator",
+          });
+        }
       }
       return touched;
     });
@@ -1248,6 +1329,27 @@ export async function bulkRemoveTagAction(
         // accepted/dismissed tracking remains intact after the bulk change.
         await updateSessionState(tx, id, loaded.aiSessionState);
         touched.push(domain);
+
+        await addActivity(tx, {
+          assetId: id,
+          assetName: domain.name,
+          action: `Bulk tag removed: "${tag}"`,
+          timestamp,
+          source: "curator",
+        });
+
+        // Automated curation rules gate is evaluated per asset for uniformity.
+        const curation = runCurationRules(domain, loaded.aiSessionState);
+        if (curation.promoted) {
+          await persistSnapshot(tx, curation.domain);
+          await addActivity(tx, {
+            assetId: id,
+            assetName: curation.domain.name,
+            action: "Auto-promoted to production ready (curation rules)",
+            timestamp,
+            source: "curator",
+          });
+        }
       }
       return touched;
     });
@@ -1285,6 +1387,19 @@ export async function bulkMoveToCollectionAction(
             assetId: id,
             assetName: domain.name,
             action: `Moved to collection: ${collectionRow.name}`,
+            timestamp,
+            source: "curator",
+          });
+        }
+
+        // Automated curation rules gate is evaluated per asset after the move.
+        const curation = runCurationRules(domain, loaded.aiSessionState);
+        if (curation.promoted) {
+          await persistSnapshot(tx, curation.domain);
+          await addActivity(tx, {
+            assetId: id,
+            assetName: curation.domain.name,
+            action: "Auto-promoted to production ready (curation rules)",
             timestamp,
             source: "curator",
           });
@@ -1399,5 +1514,53 @@ export async function searchAssetsAction(
   } catch (error) {
     console.error("searchAssetsAction failed", error);
     return { ok: false, error: "Could not search assets. Please try again." };
+  }
+}
+
+/**
+ * Stage 4.2 — Export pipeline server action.
+ *
+ * Packages the requested assets (specific ids or every asset in a collection)
+ * into a ZIP archive and returns it base64-encoded with a suggested filename,
+ * so the client can trigger a download without a separate streaming endpoint.
+ * Mirrors the `/api/export` download endpoint.
+ */
+export async function exportAssetsAction(
+  opts: { assetIds?: string[]; collectionId?: string },
+): Promise<{ ok: boolean; error?: string; base64?: string; fileName?: string }> {
+  try {
+    const collectionId = opts.collectionId?.trim();
+    const assetIds = (opts.assetIds ?? []).map((s) => s.trim()).filter(Boolean);
+
+    let assets: Asset[];
+    let label = "assets";
+
+    if (collectionId) {
+      const all = await getAssets();
+      assets = all.filter((a) => a.collectionId === collectionId);
+      const collections = await fetchCollections();
+      label = collections.find((c) => c.id === collectionId)?.name ?? "collection";
+    } else if (assetIds.length > 0) {
+      const loaded: Asset[] = [];
+      for (const id of assetIds) {
+        const asset = await getAssetById(id);
+        if (asset) loaded.push(asset);
+      }
+      assets = loaded;
+      label = loaded.length === 1 ? loaded[0].name : "assets";
+    } else {
+      return { ok: false, error: "Provide assetIds or collectionId to export." };
+    }
+
+    if (assets.length === 0) {
+      return { ok: false, error: "No assets matched the export request." };
+    }
+
+    const collections = await fetchCollections();
+    const { buffer, fileName } = await buildExportZip(assets, collections, label);
+    return { ok: true, base64: buffer.toString("base64"), fileName };
+  } catch (error) {
+    console.error("exportAssetsAction failed", error);
+    return { ok: false, error: "Could not export assets. Please try again." };
   }
 }

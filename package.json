@@ -12,6 +12,7 @@
     "@google/genai": "^2.20.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "archiver": "^8.0.0",
     "dotenv": "^17.4.2",
     "next": "16.2.11",
     "pg": "^8.23.0",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^8.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
