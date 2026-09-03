@@ -17,6 +17,8 @@ export type { AssetSearchHit, AssetSearchResult, IndexedAssetLike } from "./sear
 export type { SessionUser, UserRole } from "./auth";
 export { ROLE_LEVEL, ROLES } from "./auth";
 
+export type { AIAnalysisJobData, IngestionJobData, JobStatus, RenditionJobData } from "./queue";
+
 export type {
   AIAnalysis,
   AIAssistanceStats,
