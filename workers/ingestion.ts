@@ -35,6 +35,11 @@ const DEFAULT_CONCURRENCY = 2;
 
 const PROMOTION_ACTION = "Auto-promoted to production ready (curation rules)";
 
+/** Best-effort live progress reporting for the /api/jobs/[id]/progress SSE stream. */
+function report(job: Job<IngestionJobData>, progressPercent: number, stepLabel: string): void {
+  void job.updateProgress({ progressPercent, stepLabel });
+}
+
 function attachRenditionsToCurrentVersion(
   asset: Asset,
   renditions: RenditionPaths | null,
@@ -57,6 +62,7 @@ function attachRenditionsToCurrentVersion(
 async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
   const { assetId, filePath, mimeType, collectionId } = job.data;
 
+  report(job, 5, "Loading asset…");
   const loaded = await loadAssetForWorker(assetId);
   if (!loaded) {
     throw new Error(`Ingestion: asset ${assetId} not found`);
@@ -65,6 +71,7 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
 
   job.log(`Parsing source file for asset ${assetId} (${mimeType})`);
 
+  report(job, 10, "Reading source file…");
   let buffer: Buffer;
   try {
     buffer = await readFile(filePath);
@@ -75,6 +82,7 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
   const ext = fileExtensionOf(filePath);
 
   // 1. File parsing: enrich client metadata with server-authoritative values.
+  report(job, 25, "Extracting metadata…");
   let updated: Asset = domain;
   if (ext) {
     const base: ExtractedFileMetadata =
@@ -88,6 +96,7 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
   }
 
   // 2. Rendition generation for the current version.
+  report(job, 45, "Generating renditions…");
   const renditions = await deriveRenditions(buffer, assetId, ext);
   updated = attachRenditionsToCurrentVersion(updated, renditions);
   if (renditions) {
@@ -95,16 +104,20 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
   }
 
   // 3. AI analysis.
+  report(job, 65, "Running AI analysis…");
   const collections = await getCollections();
   updated = await generateAndAttachAnalysis(updated, collections);
   updated = recomputeProductionForWorker(updated);
 
   // 4. Curation gate + atomic snapshot.
+  report(job, 85, "Applying curation rules…");
   const { domain: curated, promoted } = applyCurationRules(updated, session);
   updated = curated;
 
+  report(job, 95, "Persisting snapshot…");
   await writeSnapshot(updated);
 
+  report(job, 100, "Complete");
   job.log(`Ingestion complete for asset ${assetId} -> snapshot persisted`);
   if (promoted) {
     job.log(`Ingestion promoted ${assetId} to PRODUCTION_READY via curation rules (${PROMOTION_ACTION})`);

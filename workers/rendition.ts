@@ -20,11 +20,17 @@ import type { RenditionJobData } from "@/types";
 
 const DEFAULT_CONCURRENCY = 3;
 
+/** Best-effort live progress reporting for the /api/jobs/[id]/progress SSE stream. */
+function report(job: Job<RenditionJobData>, progressPercent: number, stepLabel: string): void {
+  void job.updateProgress({ progressPercent, stepLabel });
+}
+
 async function processRendition(job: Job<RenditionJobData>): Promise<void> {
   const { assetId, versionId, filePath, mediaType } = job.data;
 
   const ext = fileExtensionOf(filePath) || path.extname(filePath).toLowerCase();
 
+  report(job, 20, "Reading source file…");
   let buffer: Buffer;
   try {
     buffer = await readFile(filePath);
@@ -32,8 +38,10 @@ async function processRendition(job: Job<RenditionJobData>): Promise<void> {
     throw new Error(`Rendition: unable to read source file ${filePath}: ${(error as Error).message}`);
   }
 
+  report(job, 50, "Deriving renditions…");
   const rendition = await deriveRenditions(buffer, assetId, ext);
 
+  report(job, 85, "Persisting renditions…");
   if (rendition) {
     await prisma.assetVersion.update({
       where: { id: versionId },
@@ -42,6 +50,7 @@ async function processRendition(job: Job<RenditionJobData>): Promise<void> {
         previewPath: rendition.previewPath,
       },
     });
+    report(job, 100, "Complete");
     job.log(`Persisted renditions for version ${versionId} (${mediaType})`);
   } else {
     job.log(`No renditions derived for ${versionId} (mediaType=${mediaType}, ext=${ext})`);

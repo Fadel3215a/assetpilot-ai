@@ -6,6 +6,7 @@ import { useAssets } from "@/lib/assets-context";
 import { validateUploadFile } from "@/lib/upload-validation";
 import { extractFileMetadata } from "@/lib/file-metadata";
 import { consumeAnalysisStream } from "@/lib/ai/stream-client";
+import { JobProgress } from "./job-progress";
 import { Button } from "./ui/button";
 import { Select } from "./ui/select";
 
@@ -23,6 +24,7 @@ export function AssetUpload() {
   const [lastUploadedId, setLastUploadedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [progressStep, setProgressStep] = useState<string | null>(null);
+  const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -31,6 +33,7 @@ export function AssetUpload() {
     setLastUploadedId(null);
     setStatus("processing");
     setProgressStep(null);
+    setTrackingJobId(null);
 
     let uploaded = 0;
     let lastId: string | null = null;
@@ -48,6 +51,7 @@ export function AssetUpload() {
       if (result.ok) {
         uploaded++;
         lastId = result.assetId ?? null;
+        if (result.assetId) setTrackingJobId(result.assetId);
       } else {
         setError(result.error ?? "Could not process this file. Try a different format.");
         setStatus("error");
@@ -73,6 +77,7 @@ export function AssetUpload() {
     }
 
     setProgressStep(null);
+    setTrackingJobId(null);
 
     if (uploaded > 0) {
       setSuccessMessage(
@@ -121,6 +126,10 @@ export function AssetUpload() {
           {status === "error" && "Upload failed"}
         </span>
       </div>
+
+      {isProcessing && trackingJobId && (
+        <JobProgress key={trackingJobId} jobId={trackingJobId} />
+      )}
 
       <input
         ref={inputRef}

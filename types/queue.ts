@@ -8,6 +8,25 @@
 export type JobStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
 
 /**
+ * Live progress payload broadcast over the job-progress SSE stream
+ * (`GET /api/jobs/[id]/progress`). Emitted as `data:` chunks while a worker
+ * processes a BullMQ job, and as the terminal payload when the job completes,
+ * fails, or when a fallback (no Redis / job not found) is used.
+ */
+export interface JobProgressPayload {
+  /** Id of the job being tracked. */
+  jobId: string;
+  /** Current lifecycle status of the job. */
+  status: JobStatus;
+  /** 0..100 progress estimate for the current pipeline. */
+  progressPercent: number;
+  /** Human-readable label for the current/most-recent pipeline step. */
+  stepLabel: string;
+  /** Present when the job has failed (a human-readable reason). */
+  error?: string;
+}
+
+/**
  * Payload for the asset-ingestion queue. Consumed when a raw file must be
  * normalized, metadata-extracted, and persisted as a versioned asset.
  */

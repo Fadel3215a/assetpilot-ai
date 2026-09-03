@@ -31,9 +31,15 @@ const DEFAULT_CONCURRENCY = 2;
 
 const PROMOTION_ACTION = "Auto-promoted to production ready (curation rules)";
 
+/** Best-effort live progress reporting for the /api/jobs/[id]/progress SSE stream. */
+function report(job: Job<AIAnalysisJobData>, progressPercent: number, stepLabel: string): void {
+  void job.updateProgress({ progressPercent, stepLabel });
+}
+
 async function processAiAnalysis(job: Job<AIAnalysisJobData>): Promise<void> {
   const { assetId, versionId, targets } = job.data;
 
+  report(job, 10, "Loading asset…");
   const loaded = await loadAssetForWorker(assetId);
   if (!loaded) {
     throw new Error(`AI-analysis: asset ${assetId} not found`);
@@ -42,16 +48,21 @@ async function processAiAnalysis(job: Job<AIAnalysisJobData>): Promise<void> {
 
   job.log(`Analysis targets: ${targets.length ? targets.join(", ") : "all"}`);
 
+  report(job, 30, "Loading collections…");
   const collections = await getCollections();
 
+  report(job, 55, "Generating AI analysis…");
   let updated = await generateAndAttachAnalysis(domain, collections);
   updated = recomputeProductionForWorker(updated);
 
+  report(job, 80, "Applying curation rules…");
   const { domain: promotedDomain, promoted } = applyCurationRules(updated, session);
   updated = promotedDomain;
 
+  report(job, 95, "Persisting snapshot…");
   await writeSnapshot(updated);
 
+  report(job, 100, "Complete");
   job.log(`Persisted AI analysis for asset ${assetId} (version ${versionId})`);
 
   if (promoted) {
