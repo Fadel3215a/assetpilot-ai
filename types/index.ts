@@ -14,6 +14,9 @@ export type {
 
 export type { AssetSearchHit, AssetSearchResult, IndexedAssetLike } from "./search";
 
+export type { SessionUser, UserRole } from "./auth";
+export { ROLE_LEVEL, ROLES } from "./auth";
+
 export type {
   AIAnalysis,
   AIAssistanceStats,

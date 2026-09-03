@@ -20,6 +20,7 @@ import { statusFromDecision } from "@/lib/utils";
 import { indexAsset, searchAssets } from "@/lib/search";
 import { evaluateCurationRules, type CurationEvaluation } from "@/lib/curation-rules";
 import { buildExportZip } from "@/lib/export";
+import { assertServerRole, AuthError } from "@/lib/auth";
 import {
   parseExtractedMetadata,
   parseSessionState,
@@ -338,6 +339,7 @@ export async function submitReviewAction(
   }
 
   try {
+    await assertServerRole("CURATOR");
     const asset = await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -430,6 +432,7 @@ export async function submitReviewAction(
 
     return { ok: true, asset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
       return { ok: false, error: "Asset not found." };
     }
@@ -449,6 +452,7 @@ export async function submitComparisonAction(payload: {
   }
 
   try {
+    await assertServerRole("CURATOR");
     const result = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const affected: Asset[] = [];
@@ -509,6 +513,7 @@ export async function submitComparisonAction(payload: {
 
     return { ok: true, record: result.record, assets: result.assets };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("submitComparisonAction failed", error);
     return { ok: false, error: "Could not save this comparison. Please try again." };
   }
@@ -524,6 +529,7 @@ export async function updateCuratorChecklistAction(
   }
 
   try {
+    await assertServerRole("CURATOR");
     const asset = await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -559,6 +565,7 @@ export async function updateCuratorChecklistAction(
 
     return { ok: true, asset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
       return { ok: false, error: "Asset not found." };
     }
@@ -572,6 +579,7 @@ export async function acceptTagSuggestionAction(
   tagId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset; feedback?: CuratorFeedbackEntry }> {
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -615,6 +623,7 @@ export async function acceptTagSuggestionAction(
       return { ok: true, asset: domain, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("acceptTagSuggestionAction failed", error);
     return { ok: false, error: "Could not accept this tag. Please try again." };
   }
@@ -629,6 +638,7 @@ export async function editTagSuggestionAction(
   if (!trimmed) return { ok: false, error: "Tag cannot be empty." };
 
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -672,6 +682,7 @@ export async function editTagSuggestionAction(
       return { ok: true, asset: domain, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("editTagSuggestionAction failed", error);
     return { ok: false, error: "Could not edit this tag. Please try again." };
   }
@@ -682,6 +693,7 @@ export async function dismissTagSuggestionAction(
   tagId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -718,6 +730,7 @@ export async function dismissTagSuggestionAction(
       return { ok: true, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("dismissTagSuggestionAction failed", error);
     return { ok: false, error: "Could not dismiss this tag. Please try again." };
   }
@@ -728,6 +741,7 @@ export async function acceptCollectionSuggestionAction(
   collectionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset; feedback?: CuratorFeedbackEntry }> {
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -766,6 +780,7 @@ export async function acceptCollectionSuggestionAction(
       return { ok: true, asset: domain, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("acceptCollectionSuggestionAction failed", error);
     return { ok: false, error: "Could not accept this collection. Please try again." };
   }
@@ -776,6 +791,7 @@ export async function acceptObservationAction(
   observationId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -817,6 +833,7 @@ export async function acceptObservationAction(
       return { ok: true, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("acceptObservationAction failed", error);
     return { ok: false, error: "Could not accept this observation. Please try again." };
   }
@@ -827,6 +844,7 @@ export async function dismissObservationAction(
   observationId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
+    await assertServerRole("CURATOR");
     return await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) return { ok: false, error: "Asset not found." };
@@ -866,6 +884,7 @@ export async function dismissObservationAction(
       return { ok: true, feedback };
     });
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("dismissObservationAction failed", error);
     return { ok: false, error: "Could not dismiss this observation. Please try again." };
   }
@@ -875,6 +894,7 @@ export async function markAIAssistedReviewAction(
   assetId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    await assertServerRole("CURATOR");
     await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -901,6 +921,7 @@ export async function uploadAssetAction(formData: FormData): Promise<{
   asset?: Asset;
 }> {
   try {
+    await assertServerRole("CURATOR");
     const file = formData.get("file");
     if (!(file instanceof File)) {
       return { ok: false, error: "Could not process uploaded file." };
@@ -965,6 +986,7 @@ export async function uploadAssetAction(formData: FormData): Promise<{
 
     return { ok: true, assetId: domain.id, asset: domain };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("uploadAssetAction failed", error);
     return { ok: false, error: "Could not process uploaded file." };
   }
@@ -975,6 +997,7 @@ export async function updateAssetMetadataAction(
   payload: { name: string; description: string; tags: string[]; collectionId: string; usageNotes: string },
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
+    await assertServerRole("CURATOR");
     const asset = await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -1043,6 +1066,7 @@ export async function updateAssetMetadataAction(
 
     return { ok: true, asset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error) {
       if (error.message === "ASSET_NOT_FOUND") return { ok: false, error: "Asset not found." };
       if (error.message === "COLLECTION_NOT_FOUND") {
@@ -1065,6 +1089,7 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
   asset?: Asset;
 }> {
   try {
+    await assertServerRole("CURATOR");
     const assetId = formData.get("assetId");
     const label = formData.get("label");
     if (typeof assetId !== "string" || typeof label !== "string" || !label.trim()) {
@@ -1134,6 +1159,7 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
 
     return { ok: true, asset: resultAsset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error && error.message === "ASSET_NOT_FOUND") {
       return { ok: false, error: "Asset not found." };
     }
@@ -1147,6 +1173,7 @@ export async function promoteVersionAction(
   versionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
+    await assertServerRole("CURATOR");
     const asset = await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -1177,6 +1204,7 @@ export async function promoteVersionAction(
 
     return { ok: true, asset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error) {
       if (error.message === "ASSET_NOT_FOUND") return { ok: false, error: "Asset not found." };
       if (error.message === "VERSION_NOT_FOUND") return { ok: false, error: "Version not found." };
@@ -1191,6 +1219,7 @@ export async function deleteVersionAction(
   versionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
+    await assertServerRole("ADMIN");
     const asset = await withTransaction(async (tx) => {
       const loaded = await loadAsset(tx, assetId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
@@ -1221,6 +1250,7 @@ export async function deleteVersionAction(
 
     return { ok: true, asset };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     if (error instanceof Error) {
       if (error.message === "ASSET_NOT_FOUND") return { ok: false, error: "Asset not found." };
       if (error.message === "VERSION_NOT_FOUND") return { ok: false, error: "Version not found." };
@@ -1233,13 +1263,20 @@ export async function deleteVersionAction(
   }
 }
 
-export async function ignoreDuplicateAction(duplicateId: string): Promise<{ ok: boolean }> {
-  await prisma.ignoredDuplicate.upsert({
-    where: { duplicateId },
-    create: { duplicateId },
-    update: {},
-  });
-  return { ok: true };
+export async function ignoreDuplicateAction(duplicateId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await assertServerRole("CURATOR");
+    await prisma.ignoredDuplicate.upsert({
+      where: { duplicateId },
+      create: { duplicateId },
+      update: {},
+    });
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
+    console.error("ignoreDuplicateAction failed", error);
+    return { ok: false };
+  }
 }
 
 export async function bulkAddTagAction(
@@ -1250,6 +1287,7 @@ export async function bulkAddTagAction(
   if (!trimmed) return { ok: false, error: "Tag cannot be empty." };
 
   try {
+    await assertServerRole("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const touched: Asset[] = [];
@@ -1298,6 +1336,7 @@ export async function bulkAddTagAction(
     });
     return { ok: true, assets };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("bulkAddTagAction failed", error);
     return { ok: false, error: "Could not apply bulk tag. Please try again." };
   }
@@ -1308,6 +1347,7 @@ export async function bulkRemoveTagAction(
   tag: string,
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
+    await assertServerRole("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const touched: Asset[] = [];
@@ -1355,6 +1395,7 @@ export async function bulkRemoveTagAction(
     });
     return { ok: true, assets };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("bulkRemoveTagAction failed", error);
     return { ok: false, error: "Could not remove tag. Please try again." };
   }
@@ -1365,6 +1406,7 @@ export async function bulkMoveToCollectionAction(
   collectionId: string,
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
+    await assertServerRole("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const collectionRow = await tx.collection.findUnique({ where: { id: collectionId } });
       const timestamp = nowIso();
@@ -1409,6 +1451,7 @@ export async function bulkMoveToCollectionAction(
     });
     return { ok: true, assets };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("bulkMoveToCollectionAction failed", error);
     return { ok: false, error: "Could not move assets. Please try again." };
   }
@@ -1427,6 +1470,7 @@ export async function resetDemoAction(): Promise<{
   };
 }> {
   try {
+    await assertServerRole("ADMIN");
     await resetDemoData();
 
     const [assets, cols, activity, comparisons, feedback, ignoredDuplicateIds] =
@@ -1451,6 +1495,7 @@ export async function resetDemoAction(): Promise<{
       },
     };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("resetDemoAction failed", error);
     return { ok: false, error: "Could not reset the demo workspace." };
   }
@@ -1464,6 +1509,7 @@ export async function fetchFeedAction(): Promise<{
   feedback?: CuratorFeedbackEntry[];
 }> {
   try {
+    await assertServerRole("VIEWER");
     const [activity, comparisons, feedback] = await Promise.all([
       getActivity(),
       getComparisons(),
@@ -1471,6 +1517,7 @@ export async function fetchFeedAction(): Promise<{
     ]);
     return { ok: true, activity, comparisons, feedback };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("fetchFeedAction failed", error);
     return { ok: false, error: "Could not refresh recent activity." };
   }
@@ -1495,6 +1542,7 @@ export async function searchAssetsAction(
   if (!trimmed) return { ok: true, assets: [], hits: [] };
 
   try {
+    await assertServerRole("VIEWER");
     const hits = await searchAssets(trimmed, limit);
     if (hits.length === 0) return { ok: true, assets: [], hits: [] };
 
@@ -1512,6 +1560,7 @@ export async function searchAssetsAction(
 
     return { ok: true, assets: ordered, hits };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("searchAssetsAction failed", error);
     return { ok: false, error: "Could not search assets. Please try again." };
   }
@@ -1529,6 +1578,7 @@ export async function exportAssetsAction(
   opts: { assetIds?: string[]; collectionId?: string },
 ): Promise<{ ok: boolean; error?: string; base64?: string; fileName?: string }> {
   try {
+    await assertServerRole("VIEWER");
     const collectionId = opts.collectionId?.trim();
     const assetIds = (opts.assetIds ?? []).map((s) => s.trim()).filter(Boolean);
 
@@ -1560,6 +1610,7 @@ export async function exportAssetsAction(
     const { buffer, fileName } = await buildExportZip(assets, collections, label);
     return { ok: true, base64: buffer.toString("base64"), fileName };
   } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("exportAssetsAction failed", error);
     return { ok: false, error: "Could not export assets. Please try again." };
   }

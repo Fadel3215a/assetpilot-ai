@@ -1,5 +1,6 @@
 import { getAssetById, getAssets, getCollections } from "@/lib/server/queries";
 import { buildExportZip } from "@/lib/export";
+import { requireRequestRole } from "@/lib/auth";
 import type { Asset } from "@/types";
 
 export const runtime = "nodejs";
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
  * metadata JSON sidecar.
  */
 export async function GET(request: Request): Promise<Response> {
+  const auth = requireRequestRole(request, "VIEWER");
+  if (auth instanceof Response) return auth;
+
   const url = new URL(request.url);
   const rawIds = (url.searchParams.get("assetIds") ?? "")
     .split(",")

@@ -15,6 +15,7 @@ import { inferUploadCategory, mapCategoryToAssetType } from "@/lib/file-metadata
 import { parseExtractedMetadata } from "@/lib/server/mappers";
 import { getAssetById, getCollections } from "@/lib/server/queries";
 import { buildUploadedAsset } from "@/lib/upload-asset";
+import { requireRequestRole } from "@/lib/auth";
 import type { AIAnalysis, Asset } from "@/types";
 
 export const runtime = "nodejs";
@@ -109,6 +110,9 @@ async function* geminiStream(target: AnalyzeTarget): AsyncGenerator<string> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const auth = requireRequestRole(request, "CURATOR");
+  if (auth instanceof Response) return auth;
+
   const contentType = request.headers.get("content-type") ?? "";
 
   try {
