@@ -121,5 +121,5 @@ export function proxy(request: NextRequest): NextResponse | Response {
 }
 
 export const config = {
-  matcher: ["/api/ai/stream", "/api/export", "/api/jobs/:path*"],
+  matcher: ["/api/ai/stream", "/api/export", "/api/jobs/:path*", "/api/storage/presigned-url"],
 };

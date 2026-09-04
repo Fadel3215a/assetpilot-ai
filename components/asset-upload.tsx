@@ -4,8 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
 import { validateUploadFile } from "@/lib/upload-validation";
-import { extractFileMetadata } from "@/lib/file-metadata";
-import { consumeAnalysisStream } from "@/lib/ai/stream-client";
+import type { DirectUploadByteProgress } from "@/lib/storage/client-upload";
 import { JobProgress } from "./job-progress";
 import { Button } from "./ui/button";
 import { Select } from "./ui/select";
@@ -14,8 +13,15 @@ type UploadStatus = "idle" | "processing" | "ready" | "error";
 
 const typeLabels = ["Images", "Video", "Audio", "3D", "Other"] as const;
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 export function AssetUpload() {
-  const { uploadAsset, collections } = useAssets();
+  const { uploadViaStorage, collections } = useAssets();
   const inputRef = useRef<HTMLInputElement>(null);
   const [collectionId, setCollectionId] = useState("col-archive-draft");
   const [status, setStatus] = useState<UploadStatus>("idle");
@@ -23,7 +29,7 @@ export function AssetUpload() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastUploadedId, setLastUploadedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [progressStep, setProgressStep] = useState<string | null>(null);
+  const [byteProgress, setByteProgress] = useState<DirectUploadByteProgress | null>(null);
   const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
@@ -32,7 +38,7 @@ export function AssetUpload() {
     setSuccessMessage(null);
     setLastUploadedId(null);
     setStatus("processing");
-    setProgressStep(null);
+    setByteProgress(null);
     setTrackingJobId(null);
 
     let uploaded = 0;
@@ -47,7 +53,10 @@ export function AssetUpload() {
         return;
       }
 
-      const result = await uploadAsset(file, collectionId);
+      setByteProgress(null);
+      const result = await uploadViaStorage(file, collectionId, {
+        onByteProgress: (progress) => setByteProgress(progress),
+      });
       if (result.ok) {
         uploaded++;
         lastId = result.assetId ?? null;
@@ -58,30 +67,14 @@ export function AssetUpload() {
         if (inputRef.current) inputRef.current.value = "";
         return;
       }
-
-      // Stream AI progress while the canonical record lands.
-      setProgressStep("Queued for AI analysis…");
-      try {
-        const extracted = await extractFileMetadata(file);
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("collectionId", collectionId);
-        formData.append("extractedMetadata", JSON.stringify(extracted));
-        await consumeAnalysisStream(formData, {
-          onProgress: (step) => setProgressStep(step),
-        });
-      } catch {
-        // Non-fatal: stream is a progressive enhancement over the persisted action result.
-        setProgressStep(null);
-      }
     }
 
-    setProgressStep(null);
+    setByteProgress(null);
     setTrackingJobId(null);
 
     if (uploaded > 0) {
       setSuccessMessage(
-        `${uploaded} asset${uploaded > 1 ? "s" : ""} added for this session. Files are processed locally only.`,
+        `${uploaded} asset${uploaded > 1 ? "s" : ""} added for this session. Files are uploaded directly to storage.`,
       );
       setLastUploadedId(lastId);
       setStatus("ready");
@@ -118,14 +111,30 @@ export function AssetUpload() {
         Status:{" "}
         <span className="font-medium text-foreground">
           {status === "idle" && "Ready to upload"}
-          {status === "processing" &&
-            (progressStep
-              ? `Processing file and extracting metadata… ${progressStep}`
-              : "Processing file and extracting metadata…")}
+          {status === "processing" && "Processing file…"}
           {status === "ready" && "Upload complete"}
           {status === "error" && "Upload failed"}
         </span>
       </div>
+
+      {isProcessing && byteProgress && byteProgress.totalBytes > 0 && (
+        <div className="space-y-1" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-foreground">Uploading to storage</span>
+            <span className="text-muted">
+              {formatBytes(byteProgress.uploadedBytes)} / {formatBytes(byteProgress.totalBytes)}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-sm bg-muted/40">
+            <div
+              className="h-full bg-foreground/70 transition-all duration-300"
+              style={{
+                width: `${Math.min(100, Math.round((byteProgress.uploadedBytes / byteProgress.totalBytes) * 100))}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {isProcessing && trackingJobId && (
         <JobProgress key={trackingJobId} jobId={trackingJobId} />
@@ -238,8 +247,9 @@ export function AssetUpload() {
       )}
 
       <p className="rounded-md border border-status-info/30 bg-surface px-3 py-2 text-xs text-muted">
-        Files are stored locally. AI analysis is streamed in real time — with a Gemini key the
-        review is generated live; without one a deterministic local analysis is used.
+        Files upload directly to storage (S3/R2 when configured, otherwise local). AI analysis
+        runs through the background queue — with a Gemini key the review is generated live;
+        without one a deterministic local analysis is used.
       </p>
     </section>
   );

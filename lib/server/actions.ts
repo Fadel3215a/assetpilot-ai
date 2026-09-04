@@ -21,6 +21,9 @@ import { indexAsset, searchAssets } from "@/lib/search";
 import { evaluateCurationRules, type CurationEvaluation } from "@/lib/curation-rules";
 import { buildExportZip } from "@/lib/export";
 import { assertServerRole, AuthError } from "@/lib/auth";
+import { isRedisConfigured } from "@/lib/queue/client";
+import { ingestionQueue, QUEUE_NAMES } from "@/lib/queue/queues";
+import { getStorageAdapter, isS3Configured } from "@/lib/storage/s3";
 import {
   parseExtractedMetadata,
   parseSessionState,
@@ -58,8 +61,10 @@ import type {
   ComparisonDecisionType,
   ComparisonRecord,
   CuratorFeedbackEntry,
+  ExtractedFileMetadata,
   QualityCriterion,
   ReviewDecisionType,
+  UploadCategory,
 } from "@/types";
 
 const CURATOR = "Alex Chen";
@@ -988,6 +993,128 @@ export async function uploadAssetAction(formData: FormData): Promise<{
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("uploadAssetAction failed", error);
+    return { ok: false, error: "Could not process uploaded file." };
+  }
+}
+
+function uploadCategoryOf(fileName: string, contentType: string): UploadCategory {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("video/")) return "video";
+  if (contentType.startsWith("audio/")) return "audio";
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (["glb", "gltf", "obj", "fbx", "usdz"].includes(ext ?? "")) return "3d";
+  return "other";
+}
+
+/**
+ * Stage 2.2 — Registers an asset that was uploaded directly to storage.
+ *
+ * Called by the client upload manager after the object bytes are in place
+ * (either via a presigned PUT to S3/R2, or — on the local backend — bundled
+ * with this call). Persists the asset record, then enqueues the background
+ * ingestion job so normalization and AI analysis happen off the upload path.
+ */
+export async function registerDirectUploadAction(formData: FormData): Promise<{
+  ok: boolean;
+  error?: string;
+  assetId?: string;
+  asset?: Asset;
+}> {
+  try {
+    await assertServerRole("CURATOR");
+
+    const file = formData.get("file");
+    const assetId = (formData.get("assetId") as string | null)?.trim();
+    const key = (formData.get("key") as string | null)?.trim();
+    const fileName = (formData.get("fileName") as string | null)?.trim();
+    const contentType =
+      ((formData.get("contentType") as string | null)?.trim() || "application/octet-stream");
+    const size = Number(formData.get("size") ?? 0);
+    const collectionId =
+      (formData.get("collectionId") as string | null)?.trim() || DEFAULT_UPLOAD_COLLECTION;
+
+    if (!assetId || !key || !fileName) {
+      return { ok: false, error: "Could not process uploaded file." };
+    }
+
+    const extractedRaw = formData.get("extractedMetadata");
+    let extracted: ExtractedFileMetadata;
+    if (typeof extractedRaw === "string") {
+      try {
+        extracted = parseExtractedMetadata(JSON.parse(extractedRaw));
+      } catch {
+        return { ok: false, error: "Could not process uploaded file." };
+      }
+    } else {
+      extracted = parseExtractedMetadata({
+        fileName,
+        extension: fileExtensionOf(fileName),
+        mimeType: contentType,
+        fileSize: size,
+      });
+    }
+
+    // Local fallback: the source bytes ride along with this call and are
+    // persisted through the storage adapter. S3/R2 uploads happen via the
+    // presigned PUT and never reach this action.
+    if (file instanceof File) {
+      const fileBytes = Buffer.from(await file.arrayBuffer());
+      await getStorageAdapter().putObject(key, fileBytes, contentType);
+    }
+
+    const collections = await loadCollections();
+    if (!collections.some((c) => c.id === collectionId)) {
+      return { ok: false, error: "Collection not found." };
+    }
+
+    const type = mapCategoryToAssetType(uploadCategoryOf(fileName, contentType));
+
+    const domain = buildUploadedAsset(extracted, type, `/media/${key}`, collectionId, collections, {
+      isSessionUpload: false,
+      id: assetId,
+    });
+
+    await withTransaction(async (tx) => {
+      await insertAssetWithChildren(tx, domain);
+      await addActivity(tx, {
+        assetId: domain.id,
+        assetName: domain.name,
+        action: "Asset uploaded",
+        timestamp: nowIso(),
+        source: "curator",
+      });
+      await addActivity(tx, {
+        assetId: domain.id,
+        assetName: domain.name,
+        action: "AI analysis queued for uploaded asset",
+        timestamp: nowIso(),
+        source: "ai",
+      });
+    });
+
+    // Keep the hybrid search index in sync with the new asset.
+    const uploadCollection = collections.find((c) => c.id === domain.collectionId);
+    await indexAsset(domain, uploadCollection?.name);
+
+    // Enqueue background ingestion. Real jobs need a live Redis; without one
+    // this is a no-op (the environment already surfaced in logs/server state).
+    if (isRedisConfigured()) {
+      // S3-backed objects have no local path yet; the key is handed to the
+      // worker as its filePath until a storage-aware worker reads it directly.
+      const filePath = isS3Configured() ? key : path.join(STORAGE_ROOT, key);
+      // The BullMQ job id matches the asset id so the job-progress SSE gateway
+      // (tracked by asset id from the client) can locate the job directly.
+      await ingestionQueue.add(
+        QUEUE_NAMES.ingestion,
+        { assetId, filePath, mimeType: contentType, collectionId },
+        { jobId: assetId, removeOnComplete: 100, removeOnFail: 500 },
+      );
+    }
+
+    return { ok: true, assetId: domain.id, asset: domain };
+  } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
+    console.error("registerDirectUploadAction failed", error);
     return { ok: false, error: "Could not process uploaded file." };
   }
 }

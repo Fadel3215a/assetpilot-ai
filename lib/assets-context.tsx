@@ -47,6 +47,10 @@ import { buildNewVersion, buildUploadedAsset } from "@/lib/upload-asset";
 import { calculateCuratorScore } from "@/lib/quality";
 import { evaluateProductionCriteria, isQueueAsset } from "@/lib/production";
 import { statusFromDecision } from "@/lib/utils";
+import {
+  uploadDirectToStorage,
+  type DirectUploadByteProgress,
+} from "@/lib/storage/client-upload";
 import type {
   ActivityItem,
   AIAssistanceStats,
@@ -131,6 +135,11 @@ interface AssetsContextValue {
   acceptObservation: (assetId: string, observationId: string) => void;
   getAssetFeedback: (assetId: string) => CuratorFeedbackEntry[];
   uploadAsset: (file: File, collectionId?: string) => Promise<{ ok: boolean; error?: string; assetId?: string }>;
+  uploadViaStorage: (
+    file: File,
+    collectionId?: string,
+    handlers?: { onByteProgress?: (progress: DirectUploadByteProgress) => void },
+  ) => Promise<{ ok: boolean; error?: string; assetId?: string }>;
   updateAssetMetadata: (assetId: string, payload: MetadataEditPayload) => { ok: boolean; error?: string };
   createAssetVersion: (
     assetId: string,
@@ -761,6 +770,72 @@ export function AssetsProvider({
     [collections, registerObjectUrl, addActivity, restoreSnapshot, reconcileFeed, takeSnapshot],
   );
 
+  const uploadViaStorage = useCallback(
+    async (
+      file: File,
+      collectionId = "col-archive-draft",
+      handlers?: { onByteProgress?: (progress: DirectUploadByteProgress) => void },
+    ) => {
+      let objectUrl: string | null = null;
+      let optimisticId: string | null = null;
+      const snapshot = takeSnapshot();
+
+      try {
+        const extracted = await extractFileMetadata(file);
+        const category = inferUploadCategory(file);
+        const type = mapCategoryToAssetType(category);
+        objectUrl = registerObjectUrl(URL.createObjectURL(file));
+        optimisticId = `asset-upload-${Date.now()}`;
+        let optimistic = buildUploadedAsset(extracted, type, objectUrl, collectionId, collections, {
+          id: optimisticId,
+          isSessionUpload: false,
+        });
+        optimistic = applyAIAndProduction(optimistic, collections);
+
+        setAssets((prev) => [optimistic, ...prev]);
+
+        addActivity({
+          assetId: optimistic.id,
+          assetName: optimistic.name,
+          action: "Asset uploaded",
+          timestamp: new Date().toISOString(),
+          source: "curator",
+        });
+
+        addActivity({
+          assetId: optimistic.id,
+          assetName: optimistic.name,
+          action: "AI analysis queued for uploaded asset",
+          timestamp: new Date().toISOString(),
+          source: "ai",
+        });
+
+        const res = await uploadDirectToStorage(file, collectionId, {
+          onByteProgress: handlers?.onByteProgress,
+        });
+        if (!res.ok || !res.asset) {
+          restoreSnapshot(snapshot);
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          return { ok: false as const, error: res.error ?? "Could not process uploaded file." };
+        }
+
+        const canonical = res.asset;
+        setAssets((prev) => [
+          canonical,
+          ...prev.filter((a) => a.id !== optimisticId && a.id !== canonical.id),
+        ]);
+        reconcileFeed();
+
+        return { ok: true as const, assetId: canonical.id };
+      } catch {
+        restoreSnapshot(snapshot);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        return { ok: false as const, error: "Could not process uploaded file." };
+      }
+    },
+    [collections, registerObjectUrl, addActivity, restoreSnapshot, reconcileFeed, takeSnapshot],
+  );
+
   const searchAssets = useCallback(
     async (query: string, limit?: number) => {
       const trimmed = query.trim();
@@ -1365,6 +1440,7 @@ export function AssetsProvider({
       acceptObservation,
       getAssetFeedback,
       uploadAsset,
+      uploadViaStorage,
       updateAssetMetadata,
       createAssetVersion,
       promoteVersion,
@@ -1406,6 +1482,7 @@ export function AssetsProvider({
       acceptObservation,
       getAssetFeedback,
       uploadAsset,
+      uploadViaStorage,
       updateAssetMetadata,
       createAssetVersion,
       promoteVersion,
