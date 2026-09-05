@@ -9,6 +9,7 @@ import { AppShell } from "./app-shell";
 import { AIReadinessSummary } from "./ai-readiness-summary";
 import { AssetThumbnail } from "./asset-thumbnail";
 import { EmptyState } from "./empty-state";
+import { ExportZipButton } from "./export-zip-button";
 import { StatusBadge } from "./status-badge";
 
 export function ProductionReadyPage() {
@@ -47,6 +48,15 @@ export function ProductionReadyPage() {
             <p className="mt-1 text-xs text-muted">Incomplete checklist items remain</p>
           </div>
         </div>
+
+        {ready.length > 0 && (
+          <div className="flex justify-end">
+            <ExportZipButton
+              assetIds={ready.map((e) => e.asset.id)}
+              label={`Export ${ready.length} production-ready assets`}
+            />
+          </div>
+        )}
 
         {evaluated.length === 0 ? (
           <EmptyState

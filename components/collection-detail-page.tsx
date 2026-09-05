@@ -6,6 +6,7 @@ import { useAssets } from "@/lib/assets-context";
 import { AppShell } from "./app-shell";
 import { AssetCard } from "./asset-card";
 import { EmptyState } from "./empty-state";
+import { ExportZipButton } from "./export-zip-button";
 
 export function CollectionDetailPage({ collectionId }: { collectionId: string }) {
   const { collections, assets } = useAssets();
@@ -28,12 +29,17 @@ export function CollectionDetailPage({ collectionId }: { collectionId: string })
       ]}
     >
       <div className="space-y-6">
-        <Link
-          href="/assets"
-          className="link-subtle inline-flex font-medium"
-        >
-          Browse Asset Library <span className="arrow-shift" aria-hidden="true">→</span>
-        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <Link
+            href="/assets"
+            className="link-subtle inline-flex font-medium"
+          >
+            Browse Asset Library <span className="arrow-shift" aria-hidden="true">→</span>
+          </Link>
+          {colAssets.length > 0 && (
+            <ExportZipButton collectionId={collectionId} label="Export collection" />
+          )}
+        </div>
 
         {colAssets.length === 0 ? (
           <EmptyState

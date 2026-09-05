@@ -5,6 +5,7 @@ import { useAssets } from "@/lib/assets-context";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
+import { ExportZipButton } from "./export-zip-button";
 
 interface BulkActionsBarProps {
   selectedIds: string[];
@@ -32,9 +33,15 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
         <p className="text-sm font-medium text-foreground">
           {selectedIds.length} asset{selectedIds.length !== 1 ? "s" : ""} selected
         </p>
-        <Button type="button" variant="ghost" className="text-xs" onClick={onClearSelection}>
-          Clear selection
-        </Button>
+        <div className="flex items-center gap-3">
+          <ExportZipButton
+            assetIds={selectedIds}
+            label={`Export ${selectedIds.length} selected`}
+          />
+          <Button type="button" variant="ghost" className="text-xs" onClick={onClearSelection}>
+            Clear selection
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
