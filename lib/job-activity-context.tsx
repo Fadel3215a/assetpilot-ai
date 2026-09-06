@@ -163,6 +163,8 @@ interface JobActivityContextValue {
 
 const JobActivityContext = createContext<JobActivityContextValue | null>(null);
 
+const EMPTY_JOBS: TrackedJob[] = [];
+
 export function JobActivityProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => {
     const instance = createActivityStore();
@@ -170,7 +172,11 @@ export function JobActivityProvider({ children }: { children: ReactNode }) {
     return instance;
   });
 
-  const trackedJobs = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const trackedJobs = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    () => EMPTY_JOBS,
+  );
 
   const trackJob = useCallback(
     (jobId: string, type: BackgroundJobType, title: string) => store.track(jobId, type, title),
