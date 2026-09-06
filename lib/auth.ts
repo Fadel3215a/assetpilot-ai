@@ -1,18 +1,22 @@
 import { headers } from "next/headers";
+import { auth } from "@/auth";
 import { ROLE_LEVEL, type SessionUser, type UserRole } from "@/types";
 
 /**
- * Stage 4.3 — RBAC permission mapping and server-context assertion helpers.
+ * Stage 4.3 + Stage 3.1 — RBAC permission mapping and server-context assertion
+ * helpers.
  *
  * Roles rank VIEWER < CURATOR < ADMIN (see types/auth.ts). A role grants every
  * permission assigned to lower-ranked roles, so a single threshold check covers
  * inheritance: canRead = level >= VIEWER, canCurate = level >= CURATOR,
  * canAdminister = level >= ADMIN.
  *
- * The caller's role is sourced from the `x-user-role` request header (set by
- * proxy.ts after validating the incoming session/API token). Where proxy has not
- * run (e.g. some server-action call sites) it falls back to the `DEMO_USER_ROLE`
- * env override so the sample workspace remains usable without a login system.
+ * Since Stage 3.1 the caller's role is resolved from the active Auth.js session
+ * via auth() when one exists (JWT stamps id + role). Where no session is active
+ * the helpers fall back to the `x-user-role` request header (set by proxy.ts or
+ * passed explicitly by service-to-service callers), and finally to the
+ * `DEMO_USER_ROLE` env override so the sample workspace remains usable without
+ * a login system.
  */
 
 export const ROLE_HEADER = "x-user-role";
@@ -78,14 +82,40 @@ function demoRole(): UserRole {
   return envRole ?? "ADMIN";
 }
 
+/**
+ * Reads the role of the active Auth.js session, or null when signed out. This
+ * is the authoritative role when a session cookie is present; header and env
+ * fallbacks below apply otherwise. Wrapped defensively because auth() requires
+ * a request-scoped cookie context that some non-request call paths lack.
+ */
+export async function sessionRole(): Promise<UserRole | null> {
+  try {
+    const session = await auth();
+    return parseRole(session?.user?.role);
+  } catch {
+    return null;
+  }
+}
+
 /** Resolves the current request's role in a server action (via next/headers). */
 export async function resolveServerRole(): Promise<UserRole> {
+  const session = await sessionRole();
+  if (session) return session;
   const h = await headers();
   return getRoleFromHeaders(h) ?? demoRole();
 }
 
 /** Builder for the SessionUser view of the current request. */
 export async function resolveSessionUser(): Promise<SessionUser> {
+  const session = await auth();
+  if (session?.user?.id) {
+    return {
+      id: session.user.id,
+      name: session.user.name ?? "User",
+      email: session.user.email ?? undefined,
+      role: parseRole(session.user.role) ?? demoRole(),
+    };
+  }
   const h = await headers();
   const role = getRoleFromHeaders(h) ?? demoRole();
   return {
@@ -107,12 +137,16 @@ export async function assertServerRole(required: UserRole): Promise<void> {
 /**
  * Route-handler assertion helper. Validates the Request's role and returns a
  * JSON error Response (suitable for immediate return) or null when allowed.
+ * Authorization is sourced from the active Auth.js session first; when no
+ * session exists the `x-user-role` header (proxy-attached or explicit) is
+ * honored, preserving the pre-NextAuth service-to-service call pattern.
  */
-export function requireRequestRole(
+export async function requireRequestRole(
   request: Request,
   required: UserRole,
-): { ok: true; role: UserRole } | Response {
-  const role = getRoleFromRequest(request);
+): Promise<{ ok: true; role: UserRole } | Response> {
+  const session = await sessionRole();
+  const role = session ?? getRoleFromRequest(request);
   if (!role) {
     return unauthorized(`Authentication required.`);
   }

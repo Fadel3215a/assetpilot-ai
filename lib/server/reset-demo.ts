@@ -30,9 +30,38 @@ export async function resetDemoData(): Promise<void> {
       await tx.ignoredDuplicate.deleteMany();
       await tx.asset.deleteMany();
       await tx.collection.deleteMany();
+      await tx.verificationToken.deleteMany();
+      await tx.account.deleteMany();
+      await tx.session.deleteMany();
+      await tx.user.deleteMany();
 
       await tx.collection.createMany({
         data: collections.map((c) => ({ ...c })),
+      });
+
+      // Stage 3.1 — demo identities for the Credentials login (plaintext demo
+      // passwords; swap for bcrypt/argon2 before production sign-in is exposed).
+      await tx.user.createMany({
+        data: [
+          {
+            email: "demo@assetpilot.ai",
+            name: "Demo User",
+            password: "demo1234",
+            role: "VIEWER",
+          },
+          {
+            email: "curator@assetpilot.ai",
+            name: "Curator User",
+            password: "curator1234",
+            role: "CURATOR",
+          },
+          {
+            email: "admin@assetpilot.ai",
+            name: "Admin User",
+            password: "admin1234",
+            role: "ADMIN",
+          },
+        ],
       });
 
       seededAssets = enrichMockAssets(rawMockAssets);

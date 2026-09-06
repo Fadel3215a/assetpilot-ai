@@ -130,7 +130,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestRole(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   const { id } = await params;

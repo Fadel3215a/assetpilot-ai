@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * browser with no server-side file buffering. Guarded to VIEWER and above.
  */
 export async function POST(request: Request): Promise<Response> {
-  const auth = requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestRole(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   let body: unknown;

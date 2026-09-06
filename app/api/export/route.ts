@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * metadata JSON sidecar.
  */
 export async function GET(request: Request): Promise<Response> {
-  const auth = requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestRole(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   const url = new URL(request.url);

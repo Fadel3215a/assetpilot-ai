@@ -110,7 +110,7 @@ async function* geminiStream(target: AnalyzeTarget): AsyncGenerator<string> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const auth = requireRequestRole(request, "CURATOR");
+  const auth = await requireRequestRole(request, "CURATOR");
   if (auth instanceof Response) return auth;
 
   const contentType = request.headers.get("content-type") ?? "";

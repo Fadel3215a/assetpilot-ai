@@ -32,7 +32,7 @@ function badRequest(message: string): Response {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
-  const guard = requireRequestRole(request, "CURATOR");
+  const guard = await requireRequestRole(request, "CURATOR");
   if (guard instanceof Response) return guard;
 
   let body: unknown;
