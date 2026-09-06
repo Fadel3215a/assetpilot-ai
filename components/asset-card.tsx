@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import type { Asset, AssetSearchHit, Collection } from "@/types";
 import { useAssets } from "@/lib/assets-context";
+import { useDrawer } from "@/lib/drawer-context";
 import { assetTypeLabel, getCurrentVersion } from "@/lib/utils";
 import { resolvePublicAssetPath } from "@/lib/base-path";
 import { AssetThumbnail } from "./asset-thumbnail";
@@ -69,6 +70,7 @@ export function AssetCard({
   hit,
 }: AssetCardProps) {
   const { getAssetHealth } = useAssets();
+  const { openDrawer } = useDrawer();
   const [hovered, setHovered] = useState(false);
 
   const version = getCurrentVersion(asset);
@@ -140,83 +142,92 @@ export function AssetCard({
         </label>
       )}
 
-      <Link href={`/assets/${asset.id}`} className="flex flex-1 flex-col">
-        <div
-          className="visual-hover relative w-full border-b border-border"
-          style={{ aspectRatio: String(aspectRatio) }}
+      <div className="flex flex-1 flex-col">
+        <button
+          type="button"
+          onClick={() => openDrawer(asset.id)}
+          aria-label={`Quick view ${asset.name}`}
+          className="block w-full cursor-pointer text-left"
         >
-          {showPreview ? (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.24 }}
-                className="absolute inset-0"
-              >
-                <video
-                  src={resolvePublicAssetPath(mediaSrc as string)}
-                  poster={resolvePublicAssetPath(version.thumbnailPath)}
-                  muted
-                  playsInline
-                  autoPlay
-                  loop
-                  preload="metadata"
-                  className="h-full w-full object-cover"
-                  aria-label={`Preview of ${asset.name}`}
-                />
-              </motion.div>
-              <div className="absolute bottom-2 right-2 z-10 rounded-md bg-black/50 p-1.5 text-white backdrop-blur-sm">
-                <AssetTypeIcon type="video" />
-              </div>
-            </>
-          ) : (
-            <AssetThumbnail
-              src={version.thumbnailPath}
-              alt={`Thumbnail for ${asset.name}`}
-              type={asset.type}
-              className="h-full w-full"
-            />
-          )}
-        </div>
-
-        <div className="flex flex-1 flex-col gap-2 p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-accent">
-                {asset.name}
-              </h3>
-              {hit && <SearchMatchBadge hit={hit} />}
-            </div>
-            <StatusBadge status={asset.status} />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span className="text-muted">{assetTypeLabel(asset.type)}</span>
-            <span className="text-border" aria-hidden="true">·</span>
-            <span className="font-medium text-foreground">Q{qualityScore}</span>
-            {collection && (
+          <div
+            className="visual-hover relative w-full border-b border-border"
+            style={{ aspectRatio: String(aspectRatio) }}
+          >
+            {showPreview ? (
               <>
-                <span className="text-border" aria-hidden="true">·</span>
-                <span className="text-muted">{collection.name}</span>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.24 }}
+                  className="absolute inset-0"
+                >
+                  <video
+                    src={resolvePublicAssetPath(mediaSrc as string)}
+                    poster={resolvePublicAssetPath(version.thumbnailPath)}
+                    muted
+                    playsInline
+                    autoPlay
+                    loop
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                    aria-label={`Preview of ${asset.name}`}
+                  />
+                </motion.div>
+                <div className="absolute bottom-2 right-2 z-10 rounded-md bg-black/50 p-1.5 text-white backdrop-blur-sm">
+                  <AssetTypeIcon type="video" />
+                </div>
               </>
+            ) : (
+              <AssetThumbnail
+                src={version.thumbnailPath}
+                alt={`Thumbnail for ${asset.name}`}
+                type={asset.type}
+                className="h-full w-full"
+              />
             )}
           </div>
+        </button>
 
-          {asset.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 opacity-80 transition-opacity group-hover:opacity-100">
-              {asset.tags.slice(0, 2).map((tag) => (
-                <span key={tag} className="tag-muted">{tag}</span>
-              ))}
+        <Link href={`/assets/${asset.id}`} className="flex flex-1 flex-col" aria-label={`Open full page for ${asset.name}`}>
+          <div className="flex flex-1 flex-col gap-2 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <h3 className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-accent">
+                  {asset.name}
+                </h3>
+                {hit && <SearchMatchBadge hit={hit} />}
+              </div>
+              <StatusBadge status={asset.status} />
             </div>
-          )}
 
-          {health && health.completeCount < health.totalCount && (
-            <p className="text-[11px] text-muted">
-              {health.completeCount}/{health.totalCount} health criteria met
-            </p>
-          )}
-        </div>
-      </Link>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className="text-muted">{assetTypeLabel(asset.type)}</span>
+              <span className="text-border" aria-hidden="true">·</span>
+              <span className="font-medium text-foreground">Q{qualityScore}</span>
+              {collection && (
+                <>
+                  <span className="text-border" aria-hidden="true">·</span>
+                  <span className="text-muted">{collection.name}</span>
+                </>
+              )}
+            </div>
+
+            {asset.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 opacity-80 transition-opacity group-hover:opacity-100">
+                {asset.tags.slice(0, 2).map((tag) => (
+                  <span key={tag} className="tag-muted">{tag}</span>
+                ))}
+              </div>
+            )}
+
+            {health && health.completeCount < health.totalCount && (
+              <p className="text-[11px] text-muted">
+                {health.completeCount}/{health.totalCount} health criteria met
+              </p>
+            )}
+          </div>
+        </Link>
+      </div>
 
       <AnimatePresence>
         {hovered && (
@@ -235,14 +246,18 @@ export function AssetCard({
               <StatusBadge status={asset.status} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/assets/${asset.id}`}
+              <button
+                type="button"
+                onClick={() => {
+                  setHovered(false);
+                  openDrawer(asset.id);
+                }}
                 className="pointer-events-auto inline-flex items-center gap-1.5 rounded-sm bg-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition-colors hover:bg-white/20"
                 aria-label={`Quick view ${asset.name}`}
               >
                 <EyeIcon />
                 Quick View
-              </Link>
+              </button>
               {downloadHref && (
                 <a
                   href={downloadHref}
