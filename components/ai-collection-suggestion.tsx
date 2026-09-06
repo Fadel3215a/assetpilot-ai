@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Select } from "./ui/select";
 import { SourceBadge } from "./ui/source-badge";
@@ -20,6 +21,7 @@ export function AICollectionSuggestion({
   currentCollectionId,
 }: AICollectionSuggestionProps) {
   const { collections, acceptCollectionSuggestion } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const [changing, setChanging] = useState(false);
   const [selectedId, setSelectedId] = useState(suggestedCollectionId);
 
@@ -44,7 +46,10 @@ export function AICollectionSuggestion({
           <Button
             variant="primary"
             className="text-xs"
+            aria-disabled={locked}
+            title={locked ? lockHint : undefined}
             onClick={() => {
+              if (!guard()) return;
               acceptCollectionSuggestion(assetId, selectedId);
               setChanging(false);
             }}
@@ -61,7 +66,11 @@ export function AICollectionSuggestion({
             <Button
               variant="success"
               className="text-xs"
-              onClick={() => acceptCollectionSuggestion(assetId, suggestedCollectionId)}
+              aria-disabled={locked}
+              title={locked ? lockHint : undefined}
+              onClick={() => {
+                if (guard()) acceptCollectionSuggestion(assetId, suggestedCollectionId);
+              }}
             >
               Accept
             </Button>

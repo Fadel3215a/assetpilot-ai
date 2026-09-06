@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 
 export function DemoResetButton() {
   const { resetDemo } = useAssets();
+  const admin = useProtectedAction("ADMIN");
   const [confirming, setConfirming] = useState(false);
 
   if (confirming) {
@@ -22,7 +24,10 @@ export function DemoResetButton() {
             type="button"
             variant="danger"
             className="flex-1 px-2 py-1.5 text-xs"
+            aria-disabled={admin.locked}
+            title={admin.locked ? admin.lockHint : undefined}
             onClick={() => {
+              if (!admin.guard()) return;
               resetDemo();
               setConfirming(false);
             }}
@@ -47,7 +52,11 @@ export function DemoResetButton() {
       type="button"
       variant="ghost"
       className="w-full justify-start px-3 py-2 text-xs text-muted hover:text-foreground"
-      onClick={() => setConfirming(true)}
+      aria-disabled={admin.locked}
+      title={admin.locked ? admin.lockHint : undefined}
+      onClick={() => {
+        if (admin.guard()) setConfirming(true);
+      }}
     >
       Reset demo session
     </Button>

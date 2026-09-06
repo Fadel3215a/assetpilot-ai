@@ -1,29 +1,41 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { auth } from "@/auth";
 import { parseRole, ROLE_HEADER } from "@/lib/auth";
-import type { UserRole } from "@/types";
+import { ROLE_LEVEL, type UserRole } from "@/types";
+import type { Session } from "next-auth";
 
 /**
- * Stage 4.3 — Proxy (Next 16 replacement for middleware).
+ * Stage 4.3 + Stage 3.3 — Proxy (Next 16 replacement for middleware).
  *
- * Validates the incoming session/API identity and attaches a normalized
- * `x-user-role` header so guarded API routes and server functions can trust the
- * caller's role. Also enforces a lightweight in-memory rate-limit placeholder
- * on the two heavy endpoints (/api/ai/stream, /api/export).
+ * Validates the incoming identity and attaches a normalized `x-user-role`
+ * header so guarded API routes and server functions can trust the caller's
+ * role. Since Stage 3.3 the active Auth.js session is decoded here (JWT, via
+ * the auth() middleware wrapper) and is the authoritative role source when a
+ * session cookie is present; API-key / header / demo fallbacks apply for
+ * service-to-service and pre-login demo traffic.
  *
- * NOTE: This is an optimistic front-door check. Authorization is enforced for
- * real inside each route/server function via lib/auth.ts.
+ * Fine-grained route protection is also enforced at this front door and
+ * re-checked inside every route/server function (see lib/auth.ts):
+ *   - /curation, /reviews, /production-ready  -> CURATOR or ADMIN
+ *   - /api/storage/presigned-url, /api/ai/stream -> CURATOR or ADMIN
+ * A lightweight in-memory rate-limit placeholder stays on the two heavy
+ * endpoints (/api/ai/stream, /api/export).
  */
 
 const STREAM_PATH = "/api/ai/stream";
 const EXPORT_PATH = "/api/export";
 
-const DEFAULT_ROLE = process.env.DEMO_USER_ROLE && parseRole(process.env.DEMO_USER_ROLE)
-  ? (process.env.DEMO_USER_ROLE as UserRole)
-  : "ADMIN";
+const DEFAULT_ROLE = (() => {
+  const demo = process.env.DEMO_USER_ROLE;
+  return demo && parseRole(demo) ? (demo as UserRole) : "ADMIN";
+})();
 
 const API_KEYS: string[] = process.env.API_KEYS
   ? process.env.API_KEYS.split(",").map((s) => s.trim()).filter(Boolean)
   : [];
+
+const CURATOR_ONLY_PREFIXES = ["/curation", "/reviews", "/production-ready"];
+const CURATOR_ONLY_APIS = [STREAM_PATH, "/api/storage/presigned-url"];
 
 interface RateBucket {
   start: number;
@@ -37,6 +49,13 @@ const LIMITS: Record<string, number> = {
 };
 
 const buckets = new Map<string, RateBucket>();
+
+type Identity = {
+  role: UserRole;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+};
 
 function clientKey(request: NextRequest): string {
   return (
@@ -53,24 +72,61 @@ function apiKeyRole(request: NextRequest): UserRole | null {
 }
 
 /**
- * Resolves the caller's role. Priority: validated API key (ADMIN) > explicit
- * role header > demo default.
+ * Resolves the caller's role. Priority: Auth.js session (authenticated browser
+ * user) > validated API key (service, ADMIN) > explicit role header > demo
+ * default. Session-derived identity fields override the header placeholders.
  */
-function resolveRole(request: NextRequest): {
-  role: UserRole;
-  userId: string;
-  userName: string;
-  userEmail?: string;
-} {
+function resolveIdentity(request: NextRequest, session: Session | null): Identity {
+  const sessionRole = parseRole(session?.user?.role);
   const apiRole = apiKeyRole(request);
   const headerRole = parseRole(request.headers.get(ROLE_HEADER));
-  const role = apiRole ?? headerRole ?? DEFAULT_ROLE;
-  return {
-    role,
-    userId: request.headers.get("x-user-id") ?? "system",
-    userName: request.headers.get("x-user-name") ?? "Demo User",
-    userEmail: request.headers.get("x-user-email") ?? undefined,
-  };
+  const role = sessionRole ?? apiRole ?? headerRole ?? DEFAULT_ROLE;
+
+  const userId =
+    session?.user?.id ?? request.headers.get("x-user-id") ?? "system";
+  const userName =
+    session?.user?.name ?? request.headers.get("x-user-name") ?? "Demo User";
+  const userEmail =
+    session?.user?.email ?? request.headers.get("x-user-email") ?? undefined;
+
+  return { role, userId, userName, userEmail };
+}
+
+function attachIdentityHeaders(
+  requestHeaders: Headers,
+  identity: Identity,
+): void {
+  requestHeaders.set(ROLE_HEADER, identity.role);
+  requestHeaders.set("x-user-id", identity.userId);
+  requestHeaders.set("x-user-name", identity.userName);
+  if (identity.userEmail) requestHeaders.set("x-user-email", identity.userEmail);
+}
+
+function requiresCurator(pathname: string): boolean {
+  if (CURATOR_ONLY_APIS.includes(pathname)) return true;
+  return CURATOR_ONLY_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function forbidden(request: NextRequest, identity: Identity): Response {
+  const isApi = request.nextUrl.pathname.startsWith("/api/");
+  const headers = new Headers({ "content-type": "application/json" });
+  attachIdentityHeaders(headers, identity);
+  if (isApi) {
+    return NextResponse.json(
+      { ok: false, error: "Requires the CURATOR or ADMIN role.", code: "FORBIDDEN" },
+      { status: 403, headers },
+    );
+  }
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: "Requires the CURATOR or ADMIN role. Sign in with a Curator or Admin account.",
+      code: "FORBIDDEN",
+    }),
+    { status: 403, headers },
+  );
 }
 
 function rateLimits(request: NextRequest): { limited: boolean; remaining: number } {
@@ -88,14 +144,22 @@ function rateLimits(request: NextRequest): { limited: boolean; remaining: number
   return { limited: bucket.count > limit, remaining: Math.max(0, limit - bucket.count) };
 }
 
-export function proxy(request: NextRequest): NextResponse | Response {
-  const identity = resolveRole(request);
+type AugmentedRequest = NextRequest & { auth: Session | null };
+type ProxyRunner = (request: NextRequest, event: NextFetchEvent) => NextResponse | Response;
+
+const authRunner = auth((request: AugmentedRequest) => {
+  const identity = resolveIdentity(request, request.auth);
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set(ROLE_HEADER, identity.role);
-  requestHeaders.set("x-user-id", identity.userId);
-  requestHeaders.set("x-user-name", identity.userName);
-  if (identity.userEmail) requestHeaders.set("x-user-email", identity.userEmail);
+  attachIdentityHeaders(requestHeaders, identity);
+
+  // Stage 3.3 — protected surfaces require a curator-level identity.
+  if (requiresCurator(request.nextUrl.pathname)) {
+    const level = ROLE_LEVEL[identity.role];
+    if (level < ROLE_LEVEL.CURATOR) {
+      return forbidden(request, identity);
+    }
+  }
 
   const { limited, remaining } = rateLimits(request);
 
@@ -118,6 +182,15 @@ export function proxy(request: NextRequest): NextResponse | Response {
   }
 
   return response;
+});
+
+const runProxy = authRunner as unknown as ProxyRunner;
+
+export function proxy(
+  request: NextRequest,
+  event: NextFetchEvent,
+): Promise<NextResponse | Response> {
+  return Promise.resolve(runProxy(request, event));
 }
 
 export const config = {
@@ -127,5 +200,8 @@ export const config = {
     "/api/export/stream",
     "/api/jobs/:path*",
     "/api/storage/presigned-url",
+    "/curation/:path*",
+    "/reviews/:path*",
+    "/production-ready/:path*",
   ],
 };

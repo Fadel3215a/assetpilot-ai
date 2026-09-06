@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
@@ -11,6 +12,7 @@ interface DuplicateDetectionPanelProps {
 
 export function DuplicateDetectionPanel({ assetId }: DuplicateDetectionPanelProps) {
   const { getDuplicateCandidates, ignoreDuplicate } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const candidates = getDuplicateCandidates(assetId);
 
   return (
@@ -52,7 +54,11 @@ export function DuplicateDetectionPanel({ assetId }: DuplicateDetectionPanelProp
                     type="button"
                     variant="secondary"
                     className="text-xs"
-                    onClick={() => ignoreDuplicate(candidate.id)}
+                    aria-disabled={locked}
+                    title={locked ? lockHint : undefined}
+                    onClick={() => {
+                      if (guard()) ignoreDuplicate(candidate.id);
+                    }}
                   >
                     Ignore
                   </Button>

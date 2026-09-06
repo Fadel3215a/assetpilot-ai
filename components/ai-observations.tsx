@@ -1,6 +1,7 @@
 "use client";
 
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import type { AIQualityObservation } from "@/types";
 
@@ -12,6 +13,7 @@ interface AIObservationsProps {
 
 export function AIObservations({ assetId, observations, dismissedIds }: AIObservationsProps) {
   const { acceptObservation, dismissObservation } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
 
   const active = observations.filter((o) => !dismissedIds.includes(o.id));
 
@@ -29,10 +31,26 @@ export function AIObservations({ assetId, observations, dismissedIds }: AIObserv
           </p>
           <p className="mt-1 text-xs text-muted">Why? {obs.explanation}</p>
           <div className="mt-2 flex gap-1.5">
-            <Button variant="success" className="px-2 py-1 text-xs" onClick={() => acceptObservation(assetId, obs.id)}>
+            <Button
+              variant="success"
+              className="px-2 py-1 text-xs"
+              aria-disabled={locked}
+              title={locked ? lockHint : undefined}
+              onClick={() => {
+                if (guard()) acceptObservation(assetId, obs.id);
+              }}
+            >
               Accept Observation
             </Button>
-            <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => dismissObservation(assetId, obs.id)}>
+            <Button
+              variant="ghost"
+              className="px-2 py-1 text-xs"
+              aria-disabled={locked}
+              title={locked ? lockHint : undefined}
+              onClick={() => {
+                if (guard()) dismissObservation(assetId, obs.id);
+              }}
+            >
               Dismiss
             </Button>
           </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { LoginGateProvider } from "@/components/providers/login-gate";
 import {
   AssetsProvider,
   type AssetsProviderInitialState,
@@ -72,7 +73,9 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <SessionProvider>
-          <AssetsProvider initialState={initialState}>{children}</AssetsProvider>
+          <LoginGateProvider>
+            <AssetsProvider initialState={initialState}>{children}</AssetsProvider>
+          </LoginGateProvider>
         </SessionProvider>
       </body>
     </html>

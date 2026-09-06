@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { productionSuggestionLabel } from "@/lib/generate-ai-analysis";
 import { consumeAnalysisStream } from "@/lib/ai/stream-client";
 import { AIConfidence } from "./ai-confidence";
@@ -19,6 +20,7 @@ interface AIInsightPanelProps {
 
 export function AIInsightPanel({ asset }: AIInsightPanelProps) {
   const { getAISession, markAIAssistedReview, getAssetFeedback, collections } = useAssets();
+  const { canCurate, locked, lockHint, guard } = useProtectedAction("CURATOR");
   const session = getAISession(asset.id);
   const analysis = asset.aiAnalysis;
   const assetFeedback = getAssetFeedback(asset.id);
@@ -47,8 +49,8 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
   };
 
   useEffect(() => {
-    markAIAssistedReview(asset.id);
-  }, [asset.id, markAIAssistedReview]);
+    if (canCurate) markAIAssistedReview(asset.id);
+  }, [asset.id, markAIAssistedReview, canCurate]);
 
   return (
     <div className="space-y-4">
@@ -80,7 +82,11 @@ export function AIInsightPanel({ asset }: AIInsightPanelProps) {
             type="button"
             variant="secondary"
             className="text-xs"
-            onClick={() => void runStreamingPreview()}
+            aria-disabled={locked}
+            title={locked ? lockHint : undefined}
+            onClick={() => {
+              if (guard()) void runStreamingPreview();
+            }}
             disabled={streaming}
           >
             {streaming ? "Streaming…" : "Stream preview"}

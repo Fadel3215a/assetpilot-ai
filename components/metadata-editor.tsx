@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Asset, Collection } from "@/types";
 import { getCurrentVersion } from "@/lib/utils";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
@@ -16,6 +17,7 @@ interface MetadataEditorProps {
 
 export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
   const { updateAssetMetadata } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const version = getCurrentVersion(asset);
 
   const [editing, setEditing] = useState(false);
@@ -73,7 +75,15 @@ export function MetadataEditor({ asset, collections }: MetadataEditorProps) {
           </p>
         </div>
         {!editing && (
-          <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-disabled={locked}
+            title={locked ? lockHint : undefined}
+            onClick={() => {
+              if (guard()) setEditing(true);
+            }}
+          >
             Edit metadata
           </Button>
         )}

@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { notFound } from "next/navigation";
 import { useAssets, type ReviewAction } from "@/lib/assets-context";
 import { createDefaultChecklist, isMetadataComplete, metadataCompleteness } from "@/lib/quality";
+import { useProtectedAction } from "@/lib/client/permissions";
 import {
   assetTypeLabel,
   findComparisonPartner,
@@ -27,6 +28,8 @@ import type { QualityCriterion } from "@/types";
 export function ReviewWorkspace({ assetId }: { assetId: string }) {
   const router = useRouter();
   const { getAsset, collections, submitReview, updateCuratorChecklist, assets } = useAssets();
+  const { locked: curatorLocked, lockHint: curatorLockHint, guard: curatorGuard } =
+    useProtectedAction("CURATOR");
   const asset = getAsset(assetId);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,12 +46,14 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
 
   const handleRatingChange = useCallback(
     (criterionId: string, rating: QualityCriterion["rating"]) => {
+      if (!curatorGuard()) return;
       updateCuratorChecklist(assetId, criterionId, rating);
     },
-    [assetId, updateCuratorChecklist],
+    [assetId, updateCuratorChecklist, curatorGuard],
   );
 
   function handleAction(action: ReviewAction) {
+    if (!curatorGuard()) return;
     setError(null);
     setSuccess(null);
     const result = submitReview(assetId, { action, notes: notes || undefined, checklist });
@@ -201,7 +206,11 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
         </p>
         <div className="space-y-4 p-4">
           <CuratorScoreDisplay checklist={checklist} />
-          <QualityChecklist checklist={checklist} onRatingChange={handleRatingChange} />
+          <QualityChecklist
+            checklist={checklist}
+            disabled={curatorLocked}
+            onRatingChange={handleRatingChange}
+          />
         </div>
       </div>
 
@@ -229,13 +238,31 @@ export function ReviewWorkspace({ assetId }: { assetId: string }) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="success" onClick={() => handleAction("APPROVED")} aria-label="Approve asset">
+            <Button
+              variant="success"
+              onClick={() => handleAction("APPROVED")}
+              aria-label="Approve asset"
+              aria-disabled={curatorLocked}
+              title={curatorLocked ? curatorLockHint : undefined}
+            >
               Approve
             </Button>
-            <Button variant="secondary" onClick={() => handleAction("CHANGES_REQUESTED")} aria-label="Request changes">
+            <Button
+              variant="secondary"
+              onClick={() => handleAction("CHANGES_REQUESTED")}
+              aria-label="Request changes"
+              aria-disabled={curatorLocked}
+              title={curatorLocked ? curatorLockHint : undefined}
+            >
               Request Changes
             </Button>
-            <Button variant="danger" onClick={() => handleAction("REJECTED")} aria-label="Reject asset">
+            <Button
+              variant="danger"
+              onClick={() => handleAction("REJECTED")}
+              aria-label="Reject asset"
+              aria-disabled={curatorLocked}
+              title={curatorLocked ? curatorLockHint : undefined}
+            >
               Reject
             </Button>
           </div>

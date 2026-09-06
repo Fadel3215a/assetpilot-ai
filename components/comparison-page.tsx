@@ -8,6 +8,7 @@ import { useAssets } from "@/lib/assets-context";
 import { getAIAnalysisProvider } from "@/lib/ai";
 import { metadataCompleteness } from "@/lib/quality";
 import { comparisonDecisionLabel } from "@/lib/production";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { assetTypeLabel, findComparisonPartner, getCurrentVersion } from "@/lib/utils";
 import { AIComparisonSummaryPanel } from "@/components/ai-comparison-summary";
 import { AssetThumbnail } from "@/components/asset-thumbnail";
@@ -77,6 +78,7 @@ function ComparisonPanel({
 
 export function ComparisonPage() {
   const { assets, collections, submitComparison, comparisons } = useAssets();
+  const curator = useProtectedAction("CURATOR");
   const searchParams = useSearchParams();
 
   const initialCompareIds = useMemo(() => {
@@ -124,6 +126,7 @@ export function ComparisonPage() {
   }
 
   function handleDecision(decision: ComparisonDecisionType) {
+    if (!curator.guard()) return;
     setError(null);
     setSuccess(null);
 
@@ -260,10 +263,38 @@ export function ComparisonPage() {
             aria-label="Comparison reason"
           />
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={() => handleDecision("PREFER_A")}>Prefer A</Button>
-            <Button variant="primary" onClick={() => handleDecision("PREFER_B")}>Prefer B</Button>
-            <Button variant="secondary" onClick={() => handleDecision("KEEP_BOTH")}>Keep Both</Button>
-            <Button variant="danger" onClick={() => handleDecision("REJECT_BOTH")}>Reject Both</Button>
+            <Button
+              variant="primary"
+              aria-disabled={curator.locked}
+              title={curator.locked ? curator.lockHint : undefined}
+              onClick={() => handleDecision("PREFER_A")}
+            >
+              Prefer A
+            </Button>
+            <Button
+              variant="primary"
+              aria-disabled={curator.locked}
+              title={curator.locked ? curator.lockHint : undefined}
+              onClick={() => handleDecision("PREFER_B")}
+            >
+              Prefer B
+            </Button>
+            <Button
+              variant="secondary"
+              aria-disabled={curator.locked}
+              title={curator.locked ? curator.lockHint : undefined}
+              onClick={() => handleDecision("KEEP_BOTH")}
+            >
+              Keep Both
+            </Button>
+            <Button
+              variant="danger"
+              aria-disabled={curator.locked}
+              title={curator.locked ? curator.lockHint : undefined}
+              onClick={() => handleDecision("REJECT_BOTH")}
+            >
+              Reject Both
+            </Button>
           </div>
           {error && <p className="text-sm text-status-danger" role="alert">{error}</p>}
           {success && <p className="text-sm text-status-success" role="status">{success}</p>}

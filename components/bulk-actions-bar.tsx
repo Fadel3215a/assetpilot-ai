@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select } from "./ui/select";
@@ -14,6 +15,7 @@ interface BulkActionsBarProps {
 
 export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBarProps) {
   const { bulkAddTag, bulkRemoveTag, bulkMoveToCollection, collections } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const [tag, setTag] = useState("");
   const [removeTag, setRemoveTag] = useState("");
   const [collectionId, setCollectionId] = useState(collections[0]?.id ?? "");
@@ -58,7 +60,10 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
             />
             <Button
               type="button"
+              aria-disabled={locked}
+              title={locked ? lockHint : undefined}
               onClick={() => {
+                if (!guard()) return;
                 bulkAddTag(selectedIds, tag);
                 setTag("");
               }}
@@ -82,7 +87,10 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
             <Button
               type="button"
               variant="secondary"
+              aria-disabled={locked}
+              title={locked ? lockHint : undefined}
               onClick={() => {
+                if (!guard()) return;
                 bulkRemoveTag(selectedIds, removeTag);
                 setRemoveTag("");
               }}
@@ -112,7 +120,15 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
               ))}
             </Select>
             {!confirmMove ? (
-              <Button type="button" variant="secondary" onClick={() => setConfirmMove(true)}>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-disabled={locked}
+                title={locked ? lockHint : undefined}
+                onClick={() => {
+                  if (guard()) setConfirmMove(true);
+                }}
+              >
                 Move…
               </Button>
             ) : (
@@ -123,7 +139,10 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
                 </p>
                 <Button
                   type="button"
+                  aria-disabled={locked}
+                  title={locked ? lockHint : undefined}
                   onClick={() => {
+                    if (!guard()) return;
                     bulkMoveToCollection(selectedIds, collectionId);
                     setConfirmMove(false);
                   }}

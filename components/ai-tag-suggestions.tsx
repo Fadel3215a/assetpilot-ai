@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAssets } from "@/lib/assets-context";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import type { AITagSuggestion } from "@/types";
@@ -14,6 +15,7 @@ interface AITagSuggestionsProps {
 
 export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSuggestionsProps) {
   const { acceptTagSuggestion, editTagSuggestion, dismissTagSuggestion } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -47,7 +49,10 @@ export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSu
               <Button
                 variant="primary"
                 className="px-2 py-1 text-xs"
+                aria-disabled={locked}
+                title={locked ? lockHint : undefined}
                 onClick={() => {
+                  if (!guard()) return;
                   editTagSuggestion(assetId, s.id, editValue);
                   setEditingId(null);
                 }}
@@ -60,7 +65,15 @@ export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSu
             </div>
           ) : (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Button variant="success" className="px-2 py-1 text-xs" onClick={() => acceptTagSuggestion(assetId, s.id)}>
+              <Button
+                variant="success"
+                className="px-2 py-1 text-xs"
+                aria-disabled={locked}
+                title={locked ? lockHint : undefined}
+                onClick={() => {
+                  if (guard()) acceptTagSuggestion(assetId, s.id);
+                }}
+              >
                 Accept
               </Button>
               <Button
@@ -73,7 +86,15 @@ export function AITagSuggestions({ assetId, suggestions, dismissedIds }: AITagSu
               >
                 Edit
               </Button>
-              <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => dismissTagSuggestion(assetId, s.id)}>
+              <Button
+                variant="ghost"
+                className="px-2 py-1 text-xs"
+                aria-disabled={locked}
+                title={locked ? lockHint : undefined}
+                onClick={() => {
+                  if (guard()) dismissTagSuggestion(assetId, s.id);
+                }}
+              >
                 Dismiss
               </Button>
             </div>

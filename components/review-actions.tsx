@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAssets, type ReviewAction } from "@/lib/assets-context";
 import { createDefaultChecklist } from "@/lib/quality";
 import { getCurrentVersion } from "@/lib/utils";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 
 interface ReviewActionsProps {
@@ -14,6 +15,7 @@ interface ReviewActionsProps {
 
 export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) {
   const { submitReview, getAsset } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const [notes, setNotes] = useState("");
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) 
   const checklist = version?.curatorChecklist ?? createDefaultChecklist();
 
   function handleAction(action: ReviewAction) {
+    if (!guard()) return;
     setError(null);
     const result = submitReview(assetId, { action, notes: notes || undefined, checklist });
     if (!result.ok) {
@@ -65,13 +68,31 @@ export function ReviewActions({ assetId, currentDecision }: ReviewActionsProps) 
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="success" onClick={() => handleAction("APPROVED")} aria-label="Approve asset">
+        <Button
+          variant="success"
+          onClick={() => handleAction("APPROVED")}
+          aria-label="Approve asset"
+          aria-disabled={locked}
+          title={locked ? lockHint : undefined}
+        >
           Approve
         </Button>
-        <Button variant="secondary" onClick={() => handleAction("CHANGES_REQUESTED")} aria-label="Request changes on asset">
+        <Button
+          variant="secondary"
+          onClick={() => handleAction("CHANGES_REQUESTED")}
+          aria-label="Request changes on asset"
+          aria-disabled={locked}
+          title={locked ? lockHint : undefined}
+        >
           Request Changes
         </Button>
-        <Button variant="danger" onClick={() => handleAction("REJECTED")} aria-label="Reject asset">
+        <Button
+          variant="danger"
+          onClick={() => handleAction("REJECTED")}
+          aria-label="Reject asset"
+          aria-disabled={locked}
+          title={locked ? lockHint : undefined}
+        >
           Reject
         </Button>
       </div>

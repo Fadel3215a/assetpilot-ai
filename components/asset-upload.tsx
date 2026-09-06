@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAssets } from "@/lib/assets-context";
 import { validateUploadFile } from "@/lib/upload-validation";
+import { useProtectedAction } from "@/lib/client/permissions";
 import type { DirectUploadByteProgress } from "@/lib/storage/client-upload";
 import { JobProgress } from "./job-progress";
 import { Button } from "./ui/button";
@@ -22,6 +23,7 @@ function formatBytes(bytes: number): string {
 
 export function AssetUpload() {
   const { uploadViaStorage, collections } = useAssets();
+  const { locked, lockHint, guard } = useProtectedAction("CURATOR");
   const inputRef = useRef<HTMLInputElement>(null);
   const [collectionId, setCollectionId] = useState("col-archive-draft");
   const [status, setStatus] = useState<UploadStatus>("idle");
@@ -147,21 +149,27 @@ export function AssetUpload() {
         multiple
         accept="image/*,video/*,audio/*,.glb,.gltf,.obj,.fbx,.usdz,*/*"
         disabled={isProcessing}
-        onChange={(e) => handleFiles(e.target.files)}
+        onChange={(e) => {
+          if (guard()) handleFiles(e.target.files);
+        }}
         className="sr-only"
       />
 
       <div
-        className={`upload-dropzone ${dragging ? "upload-dropzone-dragover" : ""} ${isProcessing ? "pointer-events-none opacity-60" : ""}`}
+        className={`upload-dropzone ${dragging ? "upload-dropzone-dragover" : ""} ${isProcessing ? "pointer-events-none opacity-60" : ""} ${locked ? "opacity-60" : ""}`}
         role="button"
-        tabIndex={isProcessing ? -1 : 0}
+        tabIndex={isProcessing || locked ? -1 : 0}
         aria-label="Upload files by clicking or dropping"
+        aria-disabled={locked}
         aria-busy={isProcessing}
-        onClick={openFilePicker}
+        title={locked ? lockHint : undefined}
+        onClick={() => {
+          if (guard()) openFilePicker();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            openFilePicker();
+            if (guard()) openFilePicker();
           }
         }}
         onDragEnter={(e) => {
@@ -176,7 +184,7 @@ export function AssetUpload() {
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          handleFiles(e.dataTransfer.files);
+          if (guard()) handleFiles(e.dataTransfer.files);
         }}
       >
         <div className="flex flex-wrap justify-center gap-2">
@@ -216,7 +224,15 @@ export function AssetUpload() {
             ))}
           </Select>
         </div>
-        <Button type="button" disabled={isProcessing} onClick={openFilePicker}>
+        <Button
+          type="button"
+          disabled={isProcessing}
+          aria-disabled={locked}
+          title={locked ? lockHint : undefined}
+          onClick={() => {
+            if (guard()) openFilePicker();
+          }}
+        >
           {isProcessing ? "Processing…" : "Choose files"}
         </Button>
       </div>

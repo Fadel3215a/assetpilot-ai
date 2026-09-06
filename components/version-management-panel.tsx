@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import type { Asset } from "@/types";
 import { useAssets } from "@/lib/assets-context";
 import { findComparisonPartner, formatDate, formatFileSize } from "@/lib/utils";
+import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
@@ -15,6 +16,8 @@ interface VersionManagementPanelProps {
 
 export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
   const { createAssetVersion, promoteVersion, deleteVersion, assets } = useAssets();
+  const curator = useProtectedAction("CURATOR");
+  const admin = useProtectedAction("ADMIN");
   const fileRef = useRef<HTMLInputElement>(null);
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
@@ -92,7 +95,11 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
                         <>
                           <button
                             type="button"
-                            onClick={() => promoteVersion(asset.id, v.id)}
+                            onClick={() => {
+                              if (curator.guard()) promoteVersion(asset.id, v.id);
+                            }}
+                            aria-disabled={curator.locked}
+                            title={curator.locked ? curator.lockHint : undefined}
                             className="text-xs font-medium text-accent transition-colors hover:text-accent/80"
                           >
                             Promote
@@ -102,9 +109,13 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  deleteVersion(asset.id, v.id);
-                                  setConfirmingDelete(null);
+                                  if (admin.guard()) {
+                                    deleteVersion(asset.id, v.id);
+                                    setConfirmingDelete(null);
+                                  }
                                 }}
+                                aria-disabled={admin.locked}
+                                title={admin.locked ? admin.lockHint : undefined}
                                 className="text-xs font-medium text-status-danger transition-colors hover:text-status-danger/80"
                               >
                                 Confirm delete
@@ -120,7 +131,11 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setConfirmingDelete(v.id)}
+                              onClick={() => {
+                                if (admin.guard()) setConfirmingDelete(v.id);
+                              }}
+                              aria-disabled={admin.locked}
+                              title={admin.locked ? admin.lockHint : undefined}
                               className="text-xs text-muted transition-colors hover:text-status-danger"
                             >
                               Delete
@@ -182,14 +197,26 @@ export function VersionManagementPanel({ asset }: VersionManagementPanelProps) {
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button type="button" disabled={creating} onClick={() => handleCreate(false)}>
+              <Button
+                type="button"
+                disabled={creating}
+                aria-disabled={curator.locked}
+                title={curator.locked ? curator.lockHint : undefined}
+                onClick={() => {
+                  if (curator.guard()) handleCreate(false);
+                }}
+              >
                 {creating ? "Creating…" : "Create version (metadata only)"}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 disabled={creating}
-                onClick={() => handleCreate(true)}
+                aria-disabled={curator.locked}
+                title={curator.locked ? curator.lockHint : undefined}
+                onClick={() => {
+                  if (curator.guard()) handleCreate(true);
+                }}
               >
                 Create with file
               </Button>
