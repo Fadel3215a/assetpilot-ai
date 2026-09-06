@@ -25,7 +25,11 @@ async function processBackgroundJob(job: Job<BackgroundJobData>): Promise<unknow
     type,
     data: job.data,
     report: (progressPercent, stepLabel) => {
-      void job.updateProgress({ progressPercent, stepLabel });
+      // Fire-and-forget update: progress reporting is best-effort and must never
+      // surface as an unhandled rejection (e.g. a transient Redis hiccup mid-job).
+      void job.updateProgress({ progressPercent, stepLabel }).catch(() => {
+        /* progress telemetry is best-effort */
+      });
     },
   });
 }

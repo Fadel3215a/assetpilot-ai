@@ -22,7 +22,9 @@ const DEFAULT_CONCURRENCY = 3;
 
 /** Best-effort live progress reporting for the /api/jobs/[id]/progress SSE stream. */
 function report(job: Job<RenditionJobData>, progressPercent: number, stepLabel: string): void {
-  void job.updateProgress({ progressPercent, stepLabel });
+  void job.updateProgress({ progressPercent, stepLabel }).catch(() => {
+    /* progress telemetry is best-effort */
+  });
 }
 
 async function processRendition(job: Job<RenditionJobData>): Promise<void> {

@@ -24,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid request body." }, { status: 400 });
+    return Response.json({ ok: false, error: "Invalid request body." }, { status: 400 });
   }
 
   const record = (body ?? {}) as { assetIds?: unknown; collectionId?: unknown };
@@ -42,7 +42,7 @@ export async function POST(request: Request): Promise<Response> {
       : undefined;
 
   if (assetIds.length === 0 && !collectionId) {
-    return Response.json({ error: "Provide assetIds[] or collectionId." }, { status: 400 });
+    return Response.json({ ok: false, error: "Provide assetIds[] or collectionId." }, { status: 400 });
   }
 
   let assets: Asset[];
@@ -60,12 +60,13 @@ export async function POST(request: Request): Promise<Response> {
     }
   } catch (error) {
     console.error("export/stream: failed to load assets", error);
-    return Response.json({ error: "Export failed." }, { status: 500 });
+    return Response.json({ ok: false, error: "Export failed." }, { status: 500 });
   }
 
   if (assets.length === 0) {
     return Response.json(
       {
+        ok: false,
         error: collectionId
           ? "No assets found in this collection."
           : "No assets found for the requested ids.",
@@ -84,6 +85,6 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("export/stream: failed to start zip stream", error);
-    return Response.json({ error: "Export failed." }, { status: 500 });
+    return Response.json({ ok: false, error: "Export failed." }, { status: 500 });
   }
 }

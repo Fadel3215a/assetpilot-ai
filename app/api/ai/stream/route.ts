@@ -124,10 +124,7 @@ export async function POST(request: Request): Promise<Response> {
       const collectionId = (form.get("collectionId") as string | null)?.trim() || "col-archive-draft";
       const extractedRaw = form.get("extractedMetadata");
       if (!(file instanceof File) || typeof extractedRaw !== "string") {
-        return new Response(JSON.stringify({ error: "Invalid upload payload." }), {
-          status: 400,
-          headers: { "content-type": "application/json" },
-        });
+        return Response.json({ ok: false, error: "Invalid upload payload." }, { status: 400 });
       }
 
       const extracted = parseExtractedMetadata(JSON.parse(extractedRaw));
@@ -158,23 +155,14 @@ export async function POST(request: Request): Promise<Response> {
         const body = await request.json();
         assetId = body?.assetId;
       } catch {
-        return new Response(JSON.stringify({ error: "Invalid JSON body." }), {
-          status: 400,
-          headers: { "content-type": "application/json" },
-        });
+        return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
       }
       if (typeof assetId !== "string" || !assetId) {
-        return new Response(JSON.stringify({ error: "assetId is required." }), {
-          status: 400,
-          headers: { "content-type": "application/json" },
-        });
+        return Response.json({ ok: false, error: "assetId is required." }, { status: 400 });
       }
       const [asset, collections] = await Promise.all([getAssetById(assetId), getCollections()]);
       if (!asset || !collections) {
-        return new Response(JSON.stringify({ error: "Asset not found." }), {
-          status: 404,
-          headers: { "content-type": "application/json" },
-        });
+        return Response.json({ ok: false, error: "Asset not found." }, { status: 404 });
       }
       target = { kind: "asset", asset, collections };
     }
@@ -212,9 +200,6 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("[ai/stream] failed", error);
-    return new Response(JSON.stringify({ error: "AI analysis stream failed." }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    return Response.json({ ok: false, error: "AI analysis stream failed." }, { status: 500 });
   }
 }

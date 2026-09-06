@@ -37,7 +37,7 @@ export async function GET(request: Request): Promise<Response> {
       const collections = await getCollections();
       label = collections.find((c) => c.id === collectionId)?.name ?? "collection";
       if (assets.length === 0) {
-        return new Response("No assets found for this collection.", { status: 404 });
+        return Response.json({ ok: false, error: "No assets found for this collection." }, { status: 404 });
       }
     } else if (rawIds.length > 0) {
       const loaded: Asset[] = [];
@@ -48,14 +48,14 @@ export async function GET(request: Request): Promise<Response> {
       assets = loaded;
       label = loaded.length === 1 ? loaded[0].name : "assets";
       if (assets.length === 0) {
-        return new Response("No assets found for the requested ids.", { status: 404 });
+        return Response.json({ ok: false, error: "No assets found for the requested ids." }, { status: 404 });
       }
     } else {
-      return new Response("Provide ?assetIds= or ?collectionId=.", { status: 400 });
+      return Response.json({ ok: false, error: "Provide ?assetIds= or ?collectionId=." }, { status: 400 });
     }
   } catch (error) {
     console.error("export: failed to load assets", error);
-    return new Response("Export failed.", { status: 500 });
+    return Response.json({ ok: false, error: "Export failed." }, { status: 500 });
   }
 
   const collections = await getCollections();
@@ -71,6 +71,6 @@ export async function GET(request: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("export: failed to build zip", error);
-    return new Response("Export failed.", { status: 500 });
+    return Response.json({ ok: false, error: "Export failed." }, { status: 500 });
   }
 }

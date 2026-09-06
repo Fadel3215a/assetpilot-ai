@@ -59,7 +59,14 @@ export async function POST(request: NextRequest): Promise<Response> {
   const assetId = generateAssetId();
   const key = `assets/${assetId}/${sanitizeFileName(fileName)}`;
 
-  const uploadUrl = await getStorageAdapter().getPresignedUploadUrl(key, contentType);
-
-  return Response.json({ ok: true, uploadUrl, key, assetId, contentType, collectionId });
+  try {
+    const uploadUrl = await getStorageAdapter().getPresignedUploadUrl(key, contentType);
+    return Response.json({ ok: true, uploadUrl, key, assetId, contentType, collectionId });
+  } catch (error) {
+    console.error("storage/presigned-url: failed to issue upload URL", error);
+    return Response.json(
+      { ok: false, error: "Could not issue an upload URL. Please try again." },
+      { status: 500 },
+    );
+  }
 }

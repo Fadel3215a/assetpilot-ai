@@ -37,7 +37,9 @@ const PROMOTION_ACTION = "Auto-promoted to production ready (curation rules)";
 
 /** Best-effort live progress reporting for the /api/jobs/[id]/progress SSE stream. */
 function report(job: Job<IngestionJobData>, progressPercent: number, stepLabel: string): void {
-  void job.updateProgress({ progressPercent, stepLabel });
+  void job.updateProgress({ progressPercent, stepLabel }).catch(() => {
+    /* progress telemetry is best-effort */
+  });
 }
 
 function attachRenditionsToCurrentVersion(
