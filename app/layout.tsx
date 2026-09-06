@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SessionProvider } from "@/components/providers/session-provider";
 import {
   AssetsProvider,
   type AssetsProviderInitialState,
@@ -70,7 +71,9 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        <AssetsProvider initialState={initialState}>{children}</AssetsProvider>
+        <SessionProvider>
+          <AssetsProvider initialState={initialState}>{children}</AssetsProvider>
+        </SessionProvider>
       </body>
     </html>
   );
