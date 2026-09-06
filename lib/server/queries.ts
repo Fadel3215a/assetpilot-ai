@@ -12,6 +12,7 @@ import type {
   ActivityItem,
   Asset,
   AssetSearchHit,
+  AssetStatus,
   Collection,
   ComparisonRecord,
   CuratorFeedbackEntry,
@@ -217,4 +218,175 @@ export async function reindexAllAssets(): Promise<ReindexResult> {
   }
 
   return { count: assets.length, failed, durationMs: Math.round(performance.now() - started) };
+}
+
+export interface VectorAnalytics {
+  totalAssets: number;
+  indexedAssets: number;
+  coverageRatio: number;
+  embeddingDimensions: number;
+  vectorExtensionAvailable: boolean;
+  hnswIndexEnabled: boolean;
+  consistency: {
+    complete: number;
+    embeddingOnly: number;
+    searchTextOnly: number;
+    missing: number;
+  };
+}
+
+/**
+ * Stage 4.3 — Inventory-level vector health snapshot.
+ *
+ * Aggregates the hybrid-search index state in one pass: total vs indexed asset
+ * counts (coverage ratio), the actual embedding dimensionality stored in the
+ * DB (`vector_dims`), and whether the pgvector extension + the HNSW
+ * `Asset_embedding_hnsw_idx` index the baseline migration created are present.
+ * `consistency` breaks passengers into the four `searchText`/`embedding`
+ * presence combinations so either-where-desynced rows surface.
+ */
+export async function getVectorAnalytics(): Promise<VectorAnalytics> {
+  const [extension, index, dims, counts] = await Promise.all([
+    prisma.$queryRaw<Array<{ hasExtension: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_extension WHERE extname = 'vector'
+      ) AS "hasExtension"
+    `,
+    prisma.$queryRaw<Array<{ hasIndex: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE tablename = 'Asset' AND indexname = 'Asset_embedding_hnsw_idx'
+      ) AS "hasIndex"
+    `,
+    prisma.$queryRaw<Array<{ dims: number | null }>>`
+      SELECT COALESCE(max(vector_dims("embedding")), 0)::int AS "dims"
+      FROM "Asset"
+    `,
+    prisma.$queryRaw<Array<{ [k: string]: bigint }>>`
+      SELECT
+        count(*) AS "total",
+        count(*) FILTER (WHERE "embedding" IS NOT NULL AND "searchText" IS NOT NULL) AS "complete",
+        count(*) FILTER (WHERE "embedding" IS NOT NULL AND "searchText" IS NULL) AS "embeddingOnly",
+        count(*) FILTER (WHERE "embedding" IS NULL AND "searchText" IS NOT NULL) AS "searchTextOnly"
+      FROM "Asset"
+    `,
+  ]);
+
+  const row = counts[0] ?? {};
+  const totalAssets = Number(row.total ?? 0);
+  const complete = Number(row.complete ?? 0);
+  const embeddingOnly = Number(row.embeddingOnly ?? 0);
+  const searchTextOnly = Number(row.searchTextOnly ?? 0);
+
+  return {
+    totalAssets,
+    indexedAssets: complete,
+    coverageRatio: totalAssets > 0 ? Number((complete / totalAssets).toFixed(4)) : 0,
+    embeddingDimensions: Number(dims[0]?.dims ?? 0),
+    vectorExtensionAvailable: Boolean(extension[0]?.hasExtension),
+    hnswIndexEnabled: Boolean(index[0]?.hasIndex),
+    consistency: {
+      complete,
+      embeddingOnly,
+      searchTextOnly,
+      missing: Math.max(0, totalAssets - complete - embeddingOnly - searchTextOnly),
+    },
+  };
+}
+
+export interface VectorNeighbor {
+  assetId: string;
+  name: string;
+  status: AssetStatus;
+  cosineDistance: number;
+  l2Distance: number;
+  innerProduct: number;
+}
+
+export interface InspectVectorResult {
+  ok: boolean;
+  error?: string;
+  assetId: string;
+  embedded: boolean;
+  embeddingDimensions?: number;
+  neighbors: VectorNeighbor[];
+}
+
+const NEIGHBOR_LIMIT_MAX = 50;
+
+/**
+ * Stage 4.3 — Nearest-neighbor inspection for a single asset's embedding.
+ *
+ * Runs one raw pgvector pass that, for each indexed neighbor, reports three
+ * distance metrics side by side:
+ *   - cosine distance   `1 - (a <=> b)`         — 0 same, 2 opposite
+ *   - L2 distance       `a <-> b`               — Euclidean distance
+ *   - inner product     `(a <#> b) * -1`
+ *
+ * Rows are ordered by cosine distance descending (under the Stage spec formula
+ * larger `1 - (a <=> b)` means closer) so the top neighbors are returned first.
+ * An unembedded asset returns `embedded: false` with an empty neighbor list.
+ */
+export async function inspectVectorNeighbors(
+  assetId: string,
+  limit = 6,
+): Promise<InspectVectorResult> {
+  const target = await prisma.$queryRaw<Array<{ dims: number | null }>>`
+    SELECT vector_dims("embedding")::int AS "dims"
+    FROM "Asset"
+    WHERE "id" = ${assetId}
+    LIMIT 1
+  `;
+  const dimensions = target[0]?.dims ?? null;
+  if (dimensions === null || dimensions <= 0) {
+    return { ok: true, assetId, embedded: false, neighbors: [] };
+  }
+
+  const clamped = Math.max(1, Math.min(NEIGHBOR_LIMIT_MAX, Number(limit) || 6));
+
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; cosine: number; l2: number; innerProduct: number }>
+  >`
+    WITH target AS (
+      SELECT "embedding"
+      FROM "Asset"
+      WHERE "id" = ${assetId}
+    )
+    SELECT
+      n."id",
+      (1 - (t."embedding" <=> n."embedding")) AS "cosine",
+      (t."embedding" <-> n."embedding") AS "l2",
+      ((t."embedding" <#> n."embedding") * -1) AS "innerProduct"
+    FROM "Asset" n, target t
+    WHERE n."id" <> ${assetId}
+      AND n."embedding" IS NOT NULL
+    ORDER BY "cosine" DESC
+    LIMIT ${clamped}
+  `;
+
+  if (rows.length === 0) {
+    return { ok: true, assetId, embedded: true, embeddingDimensions: dimensions, neighbors: [] };
+  }
+
+  const ids = rows.map((row) => row.id);
+  const neighbors = await prisma.asset.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, status: true },
+  });
+  const byId = new Map(neighbors.map((n) => [n.id, n]));
+
+  return {
+    ok: true,
+    assetId,
+    embedded: true,
+    embeddingDimensions: dimensions,
+    neighbors: rows.map((row) => ({
+      assetId: row.id,
+      name: byId.get(row.id)?.name ?? "Unknown asset",
+      status: byId.get(row.id)?.status ?? "DRAFT",
+      cosineDistance: row.cosine,
+      l2Distance: row.l2,
+      innerProduct: row.innerProduct,
+    })),
+  };
 }

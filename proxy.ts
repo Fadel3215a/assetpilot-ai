@@ -196,11 +196,13 @@ export function proxy(
 export const config = {
   matcher: [
     "/api/ai/stream",
+    "/api/assets/:path*/vector",
     "/api/export",
     "/api/export/stream",
     "/api/jobs/:path*",
     "/api/storage/presigned-url",
     "/api/search",
+    "/api/search/analytics",
     "/api/search/reindex",
     "/curation/:path*",
     "/reviews/:path*",
