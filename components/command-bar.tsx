@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAssets } from "@/lib/assets-context";
 import { applyTheme, getStoredTheme, initTheme, type AppTheme } from "@/lib/theme";
+import { useJobActivity } from "@/lib/job-activity-context";
 import { getCurrentVersion } from "@/lib/utils";
 import type { Asset, AssetType } from "@/types";
 import { AssetTypeIcon } from "./asset-type-icon";
@@ -85,6 +86,7 @@ function SunMoonIcon() {
 export function CommandBar() {
   const router = useRouter();
   const { assets, collections } = useAssets();
+  const { trackJob } = useJobActivity();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -178,13 +180,15 @@ export function CommandBar() {
         setStatusText("Re-index failed to start.");
         return;
       }
-      setStatusText("Vector re-index started — progress appears in the sidebar.");
+      const payload = (await res.json()) as { ok: boolean; jobId?: string };
+      if (payload.jobId) trackJob(payload.jobId, "REINDEX_VECTORS", "Re-index vectors");
+      setStatusText("Vector re-index started — tracking in Job Activity.");
     } catch {
       setStatusText("Re-index failed to start.");
     } finally {
       setBusyAction(null);
     }
-  }, [busyAction]);
+  }, [busyAction, trackJob]);
 
   const triggerExport = useCallback(async () => {
     if (busyAction) return;
@@ -205,6 +209,7 @@ export function CommandBar() {
       const payload = (await res.json()) as { ok: boolean; jobId?: string };
       if (payload.jobId) {
         setExportJobId(payload.jobId);
+        trackJob(payload.jobId, "EXPORT_ZIP", "Export current inventory");
         setStatusText("Preparing ZIP…");
       } else {
         setStatusText("Export started.");
@@ -214,7 +219,7 @@ export function CommandBar() {
     } finally {
       setBusyAction(null);
     }
-  }, [assets, busyAction]);
+  }, [assets, busyAction, trackJob]);
 
   // Poll the export job and hand the completed ZIP to the browser.
   useEffect(() => {

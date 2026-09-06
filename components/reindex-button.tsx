@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useProtectedAction } from "@/lib/client/permissions";
 import { Button } from "./ui/button";
 import { JobProgress } from "./job-progress";
+import { useJobActivity } from "@/lib/job-activity-context";
 
 interface ReindexResult {
   count?: number;
@@ -20,6 +21,7 @@ interface ReindexResult {
  */
 export function ReindexButton() {
   const { locked, lockHint, guard } = useProtectedAction("CURATOR");
+  const { trackJob } = useJobActivity();
   const [jobId, setJobId] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function ReindexButton() {
       }
       const payload = (await res.json()) as { ok: boolean; jobId: string };
       setJobId(payload.jobId);
+      trackJob(payload.jobId, "REINDEX_VECTORS", "Re-index vectors");
     } catch {
       setSummary("Re-indexing failed.");
     }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { JobProgress } from "./job-progress";
+import { useJobActivity } from "@/lib/job-activity-context";
 
 interface ExportZipButtonProps {
   /** Specific assets to include in the ZIP. */
@@ -35,6 +36,11 @@ export function ExportZipButton({
   const [jobId, setJobId] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { trackJob } = useJobActivity();
+
+  const jobTitle = collectionId
+    ? "Export collection ZIP"
+    : `Export ${assetIds.length > 0 ? `${assetIds.length} asset${assetIds.length === 1 ? "" : "s"}` : "all assets"} ZIP`;
 
   const handleExport = async () => {
     setError(null);
@@ -64,6 +70,7 @@ export function ExportZipButton({
 
       const payload = (await response.json()) as { ok: boolean; jobId: string };
       setJobId(payload.jobId);
+      trackJob(payload.jobId, "EXPORT_ZIP", jobTitle);
     } catch {
       setError("Export failed. Please try again.");
     }

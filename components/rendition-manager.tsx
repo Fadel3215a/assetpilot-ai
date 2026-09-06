@@ -5,6 +5,7 @@ import { useProtectedAction } from "@/lib/client/permissions";
 import { useJobProgress } from "@/lib/use-job-progress";
 import { JobProgress } from "./job-progress";
 import { Button } from "./ui/button";
+import { useJobActivity } from "@/lib/job-activity-context";
 
 interface VersionRendition {
   versionId: string;
@@ -38,6 +39,7 @@ type LoadState = "loading" | "ready" | "error";
  */
 export function RenditionManager({ assetId }: { assetId: string }) {
   const { locked, lockHint, guard, canCurate } = useProtectedAction("CURATOR");
+  const { trackJob } = useJobActivity();
   const [state, setState] = useState<LoadState>("loading");
   const [data, setData] = useState<RenditionsApiShape | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export function RenditionManager({ assetId }: { assetId: string }) {
       }
       const payload = (await res.json()) as { jobId: string };
       setJobId(payload.jobId);
+      trackJob(payload.jobId, "CONVERT_RENDITION", "Regenerate renditions");
     } catch {
       setError("Failed to start rendition regeneration.");
     }

@@ -5,6 +5,8 @@ import { Header } from "./header";
 import { CommandBar } from "./command-bar";
 import { DrawerProvider } from "@/lib/drawer-context";
 import { AssetDetailDrawer } from "./asset-detail-drawer";
+import { JobActivityProvider } from "@/lib/job-activity-context";
+import { JobActivityDrawer } from "./job-activity-drawer";
 
 interface AppShellProps {
   title?: string;
@@ -25,23 +27,26 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <DrawerProvider>
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col lg:ml-0">
-          <div className="flex items-center justify-end gap-3 border-b border-border bg-background/60 px-6 py-2 lg:px-10">
-            <CommandBar />
-            <NavIdentity />
+      <JobActivityProvider>
+        <div className="flex min-h-screen bg-background">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col lg:ml-0">
+            <div className="flex items-center justify-end gap-3 border-b border-border bg-background/60 px-6 py-2 lg:px-10">
+              <CommandBar />
+              <NavIdentity />
+            </div>
+            {!hideHeader && title && (
+              <Header title={title} description={description} size={headerSize} />
+            )}
+            <main className="page-fade flex-1 px-5 py-6 lg:px-10 lg:py-8">
+              {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
+              {children}
+            </main>
           </div>
-          {!hideHeader && title && (
-            <Header title={title} description={description} size={headerSize} />
-          )}
-          <main className="page-fade flex-1 px-5 py-6 lg:px-10 lg:py-8">
-            {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
-            {children}
-          </main>
         </div>
-      </div>
-      <AssetDetailDrawer />
+        <AssetDetailDrawer />
+        <JobActivityDrawer />
+      </JobActivityProvider>
     </DrawerProvider>
   );
 }
