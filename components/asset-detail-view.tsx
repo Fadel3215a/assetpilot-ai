@@ -22,6 +22,7 @@ import { RelatedAssetsPanel } from "./related-assets-panel";
 import { VersionManagementPanel } from "./version-management-panel";
 import { VersionDiffViewer } from "./version-diff-viewer";
 import { VectorInspector } from "./vector-inspector";
+import { RenditionManager } from "./rendition-manager";
 import { QualityScoreDisplay } from "./quality-score-display";
 import { ReviewActions } from "./review-actions";
 import { DecisionHistoryPanel } from "./decision-history-panel";
@@ -215,6 +216,8 @@ export function AssetDetailView({ assetId }: { assetId: string }) {
       <AIInsightPanel asset={asset} />
 
       <VectorInspector key={asset.id} assetId={asset.id} />
+
+      <RenditionManager assetId={asset.id} />
 
       <div id="version-management">
         <VersionManagementPanel asset={asset} />

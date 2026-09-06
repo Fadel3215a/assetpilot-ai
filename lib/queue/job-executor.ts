@@ -116,66 +116,133 @@ function runConvertRendition(
 ): Promise<unknown> {
   return (async () => {
     const assetId = data.assetId?.trim();
-    if (!assetId) throw new Error("An assetId is required for rendition conversion.");
+    const assetIds = (data.assetIds ?? [])
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const collectionId = data.collectionId?.trim();
 
-    report(10, "Loading asset…");
-    const asset = await getAssetById(assetId);
-    if (!asset) throw new Error("Asset not found.");
+    report(5, "Resolving targets…");
 
-    const current = getCurrentVersion(asset);
-    const versionId = data.versionId?.trim() || current.id;
-    const version =
-      versionId === current.id
-        ? current
-        : asset.versions.find((v) => v.id === versionId);
-    if (!version) throw new Error("Version not found.");
-
-    const source =
-      resolveMediaFile(version.mediaUrl) ??
-      resolveMediaFile(version.previewPath) ??
-      resolveMediaFile(version.thumbnailPath);
-    if (!source) {
-      throw new Error("No source media file found on disk for this version.");
+    let assets: Asset[];
+    if (assetId) {
+      const asset = await getAssetById(assetId);
+      assets = asset ? [asset] : [];
+    } else if (collectionId) {
+      const all = await getAssets();
+      assets = all.filter((a) => a.collectionId === collectionId);
+    } else if (assetIds.length > 0) {
+      const loaded: Asset[] = [];
+      for (const id of assetIds) {
+        const asset = await getAssetById(id);
+        if (asset) loaded.push(asset);
+      }
+      assets = loaded;
+    } else {
+      throw new Error("Provide assetId, assetIds[] or collectionId for rendition conversion.");
     }
 
-    report(30, "Reading source file…");
-    let buffer: Buffer;
-    try {
-      buffer = await readFile(source);
-    } catch (error) {
-      throw new Error(
-        `Unable to read source file ${source}: ${(error as Error).message}`,
+    if (assets.length === 0) {
+      throw new Error("No assets matched the rendition conversion request.");
+    }
+
+    // Resolve the per-asset version being targeted (single job only).
+    const requestedVersionId = data.versionId?.trim();
+    const results: Array<{ assetId: string; versionId?: string; derived: boolean; note?: string }> =
+      [];
+    let failed = 0;
+
+    for (const [index, asset] of assets.entries()) {
+      const current = getCurrentVersion(asset);
+      const versionId = requestedVersionId || current.id;
+      const version =
+        versionId === current.id
+          ? current
+          : asset.versions.find((v) => v.id === versionId);
+      if (!version) {
+        failed += 1;
+        results.push({ assetId: asset.id, versionId, derived: false, note: "Version not found." });
+        continue;
+      }
+
+      const label = `Renditions ${asset.id} (v${version.versionNumber})`;
+      report(
+        10 + Math.round((index / assets.length) * 85),
+        `[${index + 1}/${assets.length}] ${label}`,
       );
-    }
 
-    const ext = fileExtensionOf(source) || path.extname(source).toLowerCase();
-    if (!ext) throw new Error("Could not determine the source media type.");
+      const source =
+        resolveMediaFile(version.mediaUrl) ??
+        resolveMediaFile(version.previewPath) ??
+        resolveMediaFile(version.thumbnailPath);
+      if (!source) {
+        failed += 1;
+        results.push({
+          assetId: asset.id,
+          versionId: version.id,
+          derived: false,
+          note: "No source media file found on disk for this version.",
+        });
+        continue;
+      }
 
-    report(55, "Deriving renditions…");
-    const rendition = await deriveRenditions(buffer, assetId, ext);
-    if (!rendition) {
-      return {
-        derived: false,
+      let buffer: Buffer;
+      try {
+        buffer = await readFile(source);
+      } catch (error) {
+        failed += 1;
+        results.push({
+          assetId: asset.id,
+          versionId: version.id,
+          derived: false,
+          note: `Unable to read source file: ${(error as Error).message}`,
+        });
+        continue;
+      }
+
+      const ext = fileExtensionOf(source) || path.extname(source).toLowerCase();
+      if (!ext) {
+        failed += 1;
+        results.push({
+          assetId: asset.id,
+          versionId: version.id,
+          derived: false,
+          note: "Could not determine the source media type.",
+        });
+        continue;
+      }
+
+      const rendition = await deriveRenditions(buffer, asset.id, ext);
+      if (!rendition) {
+        results.push({
+          assetId: asset.id,
+          versionId: version.id,
+          derived: false,
+          note: "No derivatives generated for this media type (or decoding failed).",
+        });
+        continue;
+      }
+
+      await prisma.assetVersion.update({
+        where: { id: version.id },
+        data: {
+          thumbnailPath: rendition.thumbnailPath,
+          previewPath: rendition.previewPath,
+        },
+      });
+
+      results.push({
+        assetId: asset.id,
         versionId: version.id,
-        note: "No derivatives generated for this media type (or decoding failed).",
-      };
+        derived: true,
+      });
     }
 
-    report(80, "Persisting renditions…");
-    await prisma.assetVersion.update({
-      where: { id: version.id },
-      data: {
-        thumbnailPath: rendition.thumbnailPath,
-        previewPath: rendition.previewPath,
-      },
-    });
-
-    report(100, "Complete");
+    report(98, "Finalizing…");
     return {
-      derived: true,
-      versionId: version.id,
-      thumbnailPath: rendition.thumbnailPath,
-      previewPath: rendition.previewPath,
+      derived: results.filter((r) => r.derived).length,
+      failed,
+      total: assets.length,
+      results,
     };
   })();
 }

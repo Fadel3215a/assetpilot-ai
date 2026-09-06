@@ -88,10 +88,21 @@ export interface ExportZipJobData {
   label?: string;
 }
 
-/** Re-derives a single asset version's derivative media (thumbnail/preview). */
+/**
+ * Re-derives one or more asset versions' derivative media (thumbnail/preview).
+ * Accepts a single assetId/versionId (the UI flow) or a collectionId / assetIds
+ * array for bulk regeneration. When no target is given, the asset's current
+ * version is used (or the current version of every selected asset for bulk).
+ */
 export interface ConvertRenditionJobData {
-  assetId: string;
+  /** Single-asset target. Optional when assetIds[] or collectionId is set. */
+  assetId?: string;
+  /** The specific version to regenerate. Defaults to the asset's current version. */
   versionId?: string;
+  /** Bulk target: derive renditions for every version of these assets. */
+  assetIds?: string[];
+  /** Bulk target: derive renditions for every asset in this collection. */
+  collectionId?: string;
 }
 
 /** Invalidates + rebuilds the inventory's hybrid search embeddings. */

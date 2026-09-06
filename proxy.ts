@@ -197,6 +197,7 @@ export const config = {
   matcher: [
     "/api/ai/stream",
     "/api/assets/:path*/vector",
+    "/api/assets/:path*/renditions",
     "/api/export",
     "/api/export/stream",
     "/api/jobs",
