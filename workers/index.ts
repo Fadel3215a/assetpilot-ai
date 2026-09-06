@@ -3,6 +3,7 @@ import { Worker } from "bullmq";
 import { createIngestionWorker } from "./ingestion";
 import { createAiAnalysisWorker } from "./ai-analysis";
 import { createRenditionWorker } from "./rendition";
+import { createBackgroundWorker } from "@/lib/queue/worker";
 import { closeQueues } from "@/lib/queue/queues";
 
 /**
@@ -10,9 +11,10 @@ import { closeQueues } from "@/lib/queue/queues";
  *
  * Loads environment variables first (Next auto-loads .env, but a standalone
  * Node worker does not), then instantiates every background worker (ingestion,
- * AI analysis, rendition) and keeps the process alive while they drain work. On
- * SIGINT/SIGTERM it gracefully closes each worker (draining in-flight jobs) and
- * shuts down the queue connections before exiting.
+ * AI analysis, rendition, background/Stage 5.1 dispatcher) and keeps the
+ * process alive while they drain work. On SIGINT/SIGTERM it gracefully closes
+ * each worker (draining in-flight jobs) and shuts down the queue connections
+ * before exiting.
  */
 
 export interface WorkerRuntime {
@@ -26,6 +28,7 @@ export function startWorkers(): WorkerRuntime {
     createIngestionWorker(),
     createAiAnalysisWorker(),
     createRenditionWorker(),
+    createBackgroundWorker(),
   ]) {
     if (worker) started.push(worker);
   }

@@ -24,6 +24,8 @@ export interface JobProgressPayload {
   stepLabel: string;
   /** Present when the job has failed (a human-readable reason). */
   error?: string;
+  /** Terminal result of a completed job (e.g. export ZIP metadata). */
+  result?: unknown;
 }
 
 /**
@@ -66,4 +68,55 @@ export interface RenditionJobData {
   filePath: string;
   /** Media type, e.g. "image" | "video" | "audio". */
   mediaType: string;
+}
+
+/**
+ * Stage 5.1 — Unified background job dispatch (EXPORT_ZIP, CONVERT_RENDITION,
+ * REINDEX_VECTORS). A job stores its full lifecycle (id, type, status,
+ * progress, result, error) either in BullMQ (production, Redis) or the
+ * in-memory `lib/queue/job-store` fallback runner.
+ */
+export type BackgroundJobType =
+  | "EXPORT_ZIP"
+  | "CONVERT_RENDITION"
+  | "REINDEX_VECTORS";
+
+/** Selects which assets an EXPORT_ZIP job packages. */
+export interface ExportZipJobData {
+  assetIds?: string[];
+  collectionId?: string;
+  label?: string;
+}
+
+/** Re-derives a single asset version's derivative media (thumbnail/preview). */
+export interface ConvertRenditionJobData {
+  assetId: string;
+  versionId?: string;
+}
+
+/** Invalidates + rebuilds the inventory's hybrid search embeddings. */
+export interface ReindexVectorsJobData {
+  collectionId?: string;
+}
+
+export type BackgroundJobData =
+  | ExportZipJobData
+  | ConvertRenditionJobData
+  | ReindexVectorsJobData;
+
+/**
+ * Normalized lifecycle record for a background job. `status: "QUEUED"` is the
+ * pending state surfaced to the UI; terminal states carry `result` (completed)
+ * or `error` (failed).
+ */
+export interface BackgroundJobState {
+  id: string;
+  type: BackgroundJobType;
+  status: JobStatus;
+  progressPercent: number;
+  stepLabel: string;
+  result?: unknown;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
 }

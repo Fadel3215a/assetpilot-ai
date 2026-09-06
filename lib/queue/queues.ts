@@ -4,15 +4,22 @@ import {
   isRedisConfigured,
   MockRedisConnection,
 } from "./client";
-import type { AIAnalysisJobData, IngestionJobData, RenditionJobData } from "@/types";
+import type {
+  AIAnalysisJobData,
+  BackgroundJobData,
+  IngestionJobData,
+  RenditionJobData,
+} from "@/types";
 
 /**
  * Stage 1.1 — BullMQ queue registry.
  *
- * Central place that owns the three background work queues:
- *   - ingestionQueue   : raw-file normalization + metadata extraction
- *   - aiAnalysisQueue  : Gemini analysis (tags, compact metadata, readiness)
- *   - renditionQueue   : derivative media (thumbnails/previews)
+ * Central place that owns the background work queues:
+ *   - ingestionQueue    : raw-file normalization + metadata extraction
+ *   - aiAnalysisQueue   : Gemini analysis (tags, compact metadata, readiness)
+ *   - renditionQueue    : derivative media (thumbnails/previews)
+ *   - backgroundQueue   : Stage 5.1 dispatcher (EXPORT_ZIP, CONVERT_RENDITION,
+ *                         REINDEX_VECTORS) — reused for any long-running work.
  *
  * Queue names are exported so workers and enqueuing callers stay in sync.
  *
@@ -26,6 +33,7 @@ export const QUEUE_NAMES = {
   ingestion: "ingestion",
   aiAnalysis: "ai-analysis",
   rendition: "rendition",
+  background: "background",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -65,7 +73,24 @@ export const renditionQueue = new Queue<RenditionJobData>(QUEUE_NAMES.rendition,
   defaultJobOptions: { attempts: 3, backoff: { type: "fixed", delay: 3000 } },
 });
 
+/**
+ * Stage 5.1 — Unified dispatcher queue. Carries EXPORT_ZIP, CONVERT_RENDITION
+ * and REINDEX_VECTORS jobs through the same worker; each job's `type` plus its
+ * `jobId` (set when enqueued) drives both progress reporting and the POST/GET
+ * routes.
+ */
+export const backgroundQueue = new Queue<BackgroundJobData>(QUEUE_NAMES.background, {
+  prefix: QUEUE_PREFIX,
+  connection: connection(),
+  defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 2000 } },
+});
+
 /** Shuts down all registered queues' connections. Idempotent. */
 export async function closeQueues(): Promise<void> {
-  await Promise.all([ingestionQueue.close(), aiAnalysisQueue.close(), renditionQueue.close()]);
+  await Promise.all([
+    ingestionQueue.close(),
+    aiAnalysisQueue.close(),
+    renditionQueue.close(),
+    backgroundQueue.close(),
+  ]);
 }

@@ -199,6 +199,7 @@ export const config = {
     "/api/assets/:path*/vector",
     "/api/export",
     "/api/export/stream",
+    "/api/jobs",
     "/api/jobs/:path*",
     "/api/storage/presigned-url",
     "/api/search",

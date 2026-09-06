@@ -195,12 +195,15 @@ const REINDEX_BATCH_SIZE = 10;
  * abort a full re-index. Returns the processed count, failures, and wall-clock
  * timing in milliseconds.
  */
-export async function reindexAllAssets(): Promise<ReindexResult> {
+export async function reindexAllAssets(
+  onProgress?: (processed: number, total: number) => void,
+): Promise<ReindexResult> {
   const [assets, collections] = await Promise.all([getAssets(), getCollections()]);
   const collectionNames = new Map(collections.map((c) => [c.id, c.name]));
 
   const started = performance.now();
   let failed = 0;
+  let processed = 0;
 
   for (let i = 0; i < assets.length; i += REINDEX_BATCH_SIZE) {
     const batch = assets.slice(i, i + REINDEX_BATCH_SIZE);
@@ -214,7 +217,9 @@ export async function reindexAllAssets(): Promise<ReindexResult> {
           }),
       ),
     );
+    processed += outcomes.length;
     failed += outcomes.filter((ok) => !ok).length;
+    onProgress?.(processed, assets.length);
   }
 
   return { count: assets.length, failed, durationMs: Math.round(performance.now() - started) };

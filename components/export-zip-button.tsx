@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
+import { JobProgress } from "./job-progress";
 
 interface ExportZipButtonProps {
   /** Specific assets to include in the ZIP. */
@@ -12,12 +13,18 @@ interface ExportZipButtonProps {
   disabled?: boolean;
 }
 
+interface ExportResult {
+  fileName?: string;
+  sizeBytes?: number;
+  base64?: string;
+}
+
 /**
- * Stage 2.3 — Streaming ZIP export trigger.
+ * Stage 5.1 — Async ZIP export trigger (rewired from /api/export/stream).
  *
- * POSTs to /api/export/stream and hands the resulting ZIP to the browser as a
- * download. The server streams the archive without buffering files in memory;
- * the browser buffers the received ZIP only while assembling the download.
+ * Dispatches an EXPORT_ZIP background job (POST /api/jobs), streams live
+ * progress via JobProgress, and — once the job reports COMPLETED with a base64
+ * ZIP in its result — hands the bundle to the browser as a download.
  */
 export function ExportZipButton({
   assetIds = [],
@@ -25,16 +32,18 @@ export function ExportZipButton({
   label = "Export ZIP",
   disabled = false,
 }: ExportZipButtonProps) {
-  const [exporting, setExporting] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleExport = async () => {
     setError(null);
-    setExporting(true);
+    setJobId(null);
+    setDownloaded(false);
     try {
-      const response = await fetch("/api/export/stream", {
+      const response = await fetch("/api/jobs", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-job-type": "EXPORT_ZIP" },
         body: JSON.stringify({
           ...(assetIds.length > 0 ? { assetIds: [...new Set(assetIds)] } : {}),
           ...(collectionId ? { collectionId } : {}),
@@ -53,32 +62,62 @@ export function ExportZipButton({
         return;
       }
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "assetpilot-export.zip";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      const payload = (await response.json()) as { ok: boolean; jobId: string };
+      setJobId(payload.jobId);
     } catch {
       setError("Export failed. Please try again.");
-    } finally {
-      setExporting(false);
     }
   };
 
+  // Download the completed ZIP exactly once a terminal result arrives.
+  useEffect(() => {
+    if (!jobId || downloaded) return;
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const payload = (await res.json()) as { job?: { status?: string; result?: ExportResult } };
+        const job = payload.job;
+        if (job?.status !== "COMPLETED") return;
+        const result = job.result as ExportResult | undefined;
+        if (!result?.base64) return;
+
+        setDownloaded(true);
+        const bytes = Uint8Array.from(atob(result.base64), (ch) => ch.charCodeAt(0));
+        const blob = new Blob([bytes], { type: "application/zip" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = result.fileName ?? "assetpilot-export.zip";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore aborted/short polls; the SSE stream is the primary signal.
+      }
+    })();
+
+    return () => controller.abort();
+  }, [jobId, downloaded]);
+
+  const showProgress = Boolean(jobId) && !downloaded && !error;
+
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-2">
       <Button
         type="button"
         variant="secondary"
-        onClick={handleExport}
-        disabled={disabled || exporting}
+        onClick={() => void handleExport()}
+        disabled={disabled || Boolean(jobId)}
       >
-        {exporting ? "Preparing…" : label}
+        {jobId ? "Preparing…" : label}
       </Button>
+      {showProgress && jobId && <JobProgress jobId={jobId} />}
       {error && (
         <p className="text-xs text-status-danger" role="alert">
           {error}

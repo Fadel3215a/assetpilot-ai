@@ -19,9 +19,15 @@ export { ROLE_LEVEL, ROLES } from "./auth";
 
 export type {
   AIAnalysisJobData,
+  BackgroundJobData,
+  BackgroundJobState,
+  BackgroundJobType,
+  ConvertRenditionJobData,
+  ExportZipJobData,
   IngestionJobData,
   JobProgressPayload,
   JobStatus,
+  ReindexVectorsJobData,
   RenditionJobData,
 } from "./queue";
 

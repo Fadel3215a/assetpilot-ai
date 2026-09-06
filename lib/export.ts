@@ -112,6 +112,7 @@ export async function buildExportZip(
   assets: Asset[],
   collections: Collection[],
   label = "assets",
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<{ buffer: Buffer; fileName: string }> {
   const zip = new ZipArchive({ zlib: { level: 9 } });
   const chunks: Buffer[] = [];
@@ -122,7 +123,7 @@ export async function buildExportZip(
     zip.on("error", reject);
   });
 
-  for (const asset of assets) {
+  for (const [index, asset] of assets.entries()) {
     const collection = collections.find((c) => c.id === asset.collectionId);
     const dirName = `${safeZipName(asset.name)}-${asset.id}`;
     const baseName = safeZipName(asset.name);
@@ -162,6 +163,8 @@ export async function buildExportZip(
         { name: `${dirName}/MEDIA-MISSING.json` },
       );
     }
+
+    onProgress?.(index + 1, assets.length);
   }
 
   zip.finalize();

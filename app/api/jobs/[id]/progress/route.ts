@@ -1,26 +1,30 @@
 import { isRedisConfigured } from "@/lib/queue/client";
 import {
   aiAnalysisQueue,
+  backgroundQueue,
   ingestionQueue,
   renditionQueue,
 } from "@/lib/queue/queues";
+import { jobStore } from "@/lib/queue/job-store";
 import { requireRequestRole } from "@/lib/auth";
-import type { JobProgressPayload, JobStatus } from "@/types";
+import type { BackgroundJobState, JobProgressPayload, JobStatus } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Stage 1.3 — Real-time job progress gateway.
+ * Stage 1.3 (extended Stage 5.1) — Real-time job progress gateway.
  *
  * `GET /api/jobs/[id]/progress` is a Server-Sent-Events endpoint that streams a
- * `JobProgressPayload` (`data:` chunks) for a BullMQ background job. Workers
- * report `{ progressPercent, stepLabel }` via `job.updateProgress` at each major
- * pipeline step; this route polls the three queues and relays the latest state.
+ * `JobProgressPayload` (`data:` chunks) for a background job.
  *
- * Fallbacks (both emit a clean terminal COMPLETED payload):
- *   - Redis is unconfigured -> there is no job to observe.
- *   - the job is not found in any queue within the polling window.
+ * Two modes:
+ *   - Redis configured: polls the four BullMQ queues (ingestion, ai-analysis,
+ *     rendition, background) and relays the latest state, including a terminal
+ *     `result` (from `returnvalue`) for completed jobs.
+ *   - No Redis (fallback): subscribes to the in-memory jobStore so updates made
+ *     by the in-process runner stream live, closing on a terminal state. Unknown
+ *     ids and unobserved jobs still emit a clean terminal COMPLETED fallback.
  */
 
 const POLL_INTERVAL_MS = 1000;
@@ -70,7 +74,7 @@ function progressOf(raw: unknown): RawProgress {
 async function findJob(
   jobId: string,
 ): Promise<{ payload: JobProgressPayload; done: boolean } | null> {
-  const queues = [ingestionQueue, aiAnalysisQueue, renditionQueue];
+  const queues = [ingestionQueue, aiAnalysisQueue, renditionQueue, backgroundQueue];
 
   for (const queue of queues) {
     const job = await queue.getJob(jobId);
@@ -102,11 +106,23 @@ async function findJob(
       progressPercent: percent,
       stepLabel: label,
       ...(error ? { error } : {}),
+      ...(status === "COMPLETED" && job.returnvalue !== undefined
+        ? { result: job.returnvalue }
+        : {}),
     };
     return { payload, done: status === "COMPLETED" || status === "FAILED" };
   }
 
   return null;
+}
+
+/** Converts a BackgroundJobState to a JobProgressPayload for the SSE stream. */
+function stateToPayload(state: BackgroundJobState): JobProgressPayload {
+  const { id, status, progressPercent, stepLabel, result, error } = state;
+  const payload: JobProgressPayload = { jobId: id, status, progressPercent, stepLabel };
+  if (error !== undefined) payload.error = error;
+  if (result !== undefined) payload.result = result;
+  return payload;
 }
 
 function fallback(jobId: string): JobProgressPayload {
@@ -126,6 +142,63 @@ function sseResponse(stream: ReadableStream<Uint8Array>): Response {
   });
 }
 
+/**
+ * Fallback-mode streaming (no Redis): emit the current jobStore state, then
+ * relay live updates until a terminal state or the deadline. Cleans up the
+ * subscription on abort.
+ */
+function fallbackStream(
+  jobId: string,
+  signal: AbortSignal,
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const initial = jobStore.get(jobId);
+      const initialState = initial
+        ? stateToPayload(initial)
+        : fallback(jobId);
+      controller.enqueue(encoder.encode(sse(initialState)));
+      if (initial && (initial.status === "COMPLETED" || initial.status === "FAILED")) {
+        controller.close();
+        return;
+      }
+
+      const unsubscribe = jobStore.subscribe(jobId, (state) => {
+        const payload = stateToPayload(state);
+        controller.enqueue(encoder.encode(sse(payload)));
+        if (payload.status === "COMPLETED" || payload.status === "FAILED") {
+          cleanup();
+          controller.close();
+        }
+      });
+
+      const cleanup = () => {
+        unsubscribe();
+        signal.removeEventListener("abort", onAbort);
+        clearTimeout(timer);
+      };
+      const onAbort = () => {
+        cleanup();
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      }, MAX_STREAM_MS);
+
+      signal.addEventListener("abort", onAbort, { once: true });
+    },
+  });
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -136,15 +209,9 @@ export async function GET(
   const { id } = await params;
   const jobId = id || "unknown";
 
-  // No live broker -> no job to observe; emit a clean terminal payload.
+  // No live broker -> stream in-memory jobStore state (fallback runner).
   if (!isRedisConfigured()) {
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(sse(fallback(jobId))));
-        controller.close();
-      },
-    });
-    return sseResponse(stream);
+    return sseResponse(fallbackStream(jobId, request.signal));
   }
 
   const deadline = Date.now() + MAX_STREAM_MS;
