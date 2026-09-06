@@ -39,29 +39,19 @@ const TABS: { id: DrawerTab; label: string }[] = [
  * Esc / ← / → / J / K keyboard navigation driven by the DrawerContext.
  */
 export function AssetDetailDrawer() {
-  const { isOpen, currentAssetId, closeDrawer, nextAsset, prevAsset } = useDrawer();
+  const { isOpen, currentAssetId, closeDrawer, moveFocus } = useDrawer();
   const { getAsset, assets } = useAssets();
 
   useEffect(() => {
     if (!isOpen) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeDrawer();
-        return;
-      }
-      if (event.key === "ArrowRight" || event.key === "j" || event.key === "J") {
-        event.preventDefault();
-        nextAsset();
-      } else if (event.key === "ArrowLeft" || event.key === "k" || event.key === "K") {
-        event.preventDefault();
-        prevAsset();
-      }
+      if (event.key === "Escape") closeDrawer();
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, closeDrawer, nextAsset, prevAsset]);
+  }, [isOpen, closeDrawer]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -127,7 +117,7 @@ export function AssetDetailDrawer() {
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={prevAsset}
+                  onClick={() => moveFocus(-1)}
                   aria-label="Previous asset"
                   className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-muted transition-colors hover:border-accent/30 hover:text-foreground"
                 >
@@ -135,7 +125,7 @@ export function AssetDetailDrawer() {
                 </button>
                 <button
                   type="button"
-                  onClick={nextAsset}
+                  onClick={() => moveFocus(1)}
                   aria-label="Next asset"
                   className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-muted transition-colors hover:border-accent/30 hover:text-foreground"
                 >

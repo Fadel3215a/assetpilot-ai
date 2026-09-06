@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAssets } from "@/lib/assets-context";
 import { applyTheme, getStoredTheme, initTheme, type AppTheme } from "@/lib/theme";
-import { useJobActivity } from "@/lib/job-activity-context";
+import { useBackgroundActions } from "@/lib/use-background-actions";
 import { getCurrentVersion } from "@/lib/utils";
 import type { Asset, AssetType } from "@/types";
 import { AssetTypeIcon } from "./asset-type-icon";
@@ -86,16 +86,14 @@ function SunMoonIcon() {
 export function CommandBar() {
   const router = useRouter();
   const { assets, collections } = useAssets();
-  const { trackJob } = useJobActivity();
+  const { busyAction, dispatchExport, dispatchReindex } = useBackgroundActions();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [theme, setTheme] = useState<AppTheme>(() =>
     typeof window === "undefined" ? "dark" : getStoredTheme(),
   );
-  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [statusText, setStatusText] = useState<string | null>(null);
-  const [exportJobId, setExportJobId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const collectionMap = useMemo(
@@ -112,7 +110,6 @@ export function CommandBar() {
 
   const closePalette = useCallback(() => {
     setOpen(false);
-    setExportJobId(null);
   }, []);
 
   useEffect(() => {
@@ -167,92 +164,18 @@ export function CommandBar() {
   }, [collections, query]);
 
   const triggerReindex = useCallback(async () => {
-    if (busyAction) return;
-    setBusyAction("reindex");
     setStatusText(null);
-    try {
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-job-type": "REINDEX_VECTORS" },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        setStatusText("Re-index failed to start.");
-        return;
-      }
-      const payload = (await res.json()) as { ok: boolean; jobId?: string };
-      if (payload.jobId) trackJob(payload.jobId, "REINDEX_VECTORS", "Re-index vectors");
-      setStatusText("Vector re-index started — tracking in Job Activity.");
-    } catch {
-      setStatusText("Re-index failed to start.");
-    } finally {
-      setBusyAction(null);
-    }
-  }, [busyAction, trackJob]);
+    const result = await dispatchReindex();
+    setStatusText(result.ok ? "Vector re-index started — tracking in Job Activity." : (result.error ?? "Re-index failed to start."));
+  }, [dispatchReindex]);
 
   const triggerExport = useCallback(async () => {
-    if (busyAction) return;
-    setBusyAction("export");
     setStatusText(null);
-    setExportJobId(null);
-    try {
-      const ids = [...new Set(assets.map((a) => a.id))];
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-job-type": "EXPORT_ZIP" },
-        body: JSON.stringify({ assetIds: ids }),
-      });
-      if (!res.ok) {
-        setStatusText("Export failed to start.");
-        return;
-      }
-      const payload = (await res.json()) as { ok: boolean; jobId?: string };
-      if (payload.jobId) {
-        setExportJobId(payload.jobId);
-        trackJob(payload.jobId, "EXPORT_ZIP", "Export current inventory");
-        setStatusText("Preparing ZIP…");
-      } else {
-        setStatusText("Export started.");
-      }
-    } catch {
-      setStatusText("Export failed to start.");
-    } finally {
-      setBusyAction(null);
-    }
-  }, [assets, busyAction, trackJob]);
-
-  // Poll the export job and hand the completed ZIP to the browser.
-  useEffect(() => {
-    if (!exportJobId) return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const res = await fetch(`/api/jobs/${encodeURIComponent(exportJobId)}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const payload = (await res.json()) as {
-          job?: { status?: string; result?: { fileName?: string; base64?: string } };
-        };
-        const job = payload.job;
-        if (job?.status !== "COMPLETED" || !job.result?.base64) return;
-        const bytes = Uint8Array.from(atob(job.result.base64), (ch) => ch.charCodeAt(0));
-        const blob = new Blob([bytes], { type: "application/zip" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = job.result.fileName ?? "assetpilot-export.zip";
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-        setStatusText("ZIP downloaded.");
-      } catch {
-        // best-effort poll
-      }
-    })();
-    return () => controller.abort();
-  }, [exportJobId]);
+    const result = await dispatchExport(assets.map((a) => a.id));
+    setStatusText(result.ok
+      ? (result.jobId ? "Preparing ZIP…" : "Export started.")
+      : (result.error ?? "Export failed to start."));
+  }, [assets, dispatchExport]);
 
   const toggleTheme = useCallback(() => {
     const next: AppTheme = theme === "dark" ? "light" : "dark";

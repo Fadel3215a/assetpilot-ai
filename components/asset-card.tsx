@@ -70,8 +70,9 @@ export function AssetCard({
   hit,
 }: AssetCardProps) {
   const { getAssetHealth } = useAssets();
-  const { openDrawer } = useDrawer();
+  const { openDrawer, activeAssetId } = useDrawer();
   const [hovered, setHovered] = useState(false);
+  const isActiveFocus = activeAssetId === asset.id;
 
   const version = getCurrentVersion(asset);
   const health = getAssetHealth(asset.id);
@@ -103,7 +104,9 @@ export function AssetCard({
 
   return (
     <motion.div
-      className="group relative flex flex-col overflow-hidden rounded-md border bg-surface"
+      className={`group relative flex flex-col overflow-hidden rounded-md border bg-surface ${
+        isActiveFocus ? "asset-active-ring" : ""
+      }`}
       variants={frameVariants}
       initial="idle"
       whileHover="hover"

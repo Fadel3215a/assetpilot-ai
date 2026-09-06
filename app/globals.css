@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  /* Palette (unchanged) */
-  --background: #0b0f12;
-  --surface: #161c22;
-  --surface-elevated: #1c242c;
+  /* Rugged dark palette — Stage 3.1 */
+  --background: #08090d;
+  --surface: #11131a;
+  --surface-elevated: #161a24;
   --foreground: #f0f4f8;
-  --muted: #8b9aab;
+  --muted: #8595a5;
   --accent: #00f5a0;
   --accent-muted: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-foreground: #0b0f12;
-  --border: #28333e;
+  --accent-foreground: #08090d;
+  --border: #212a36;
   --border-subtle: color-mix(in srgb, var(--border) 70%, transparent);
   --status-success: #34d399;
   --status-success-muted: color-mix(in srgb, var(--status-success) 12%, transparent);
@@ -44,7 +44,7 @@ html[data-theme="light"] {
   --muted: #5b6b7c;
   --accent: #00976f;
   --accent-muted: color-mix(in srgb, var(--accent) 14%, transparent);
-  --accent-foreground: #0b0f12;
+  --accent-foreground: #08090d;
   --border: #d5dde7;
   --border-subtle: color-mix(in srgb, var(--border) 70%, transparent);
   --status-success: #059669;
@@ -129,12 +129,12 @@ body {
 }
 
 @layer base {
-  /* Visible keyboard focus for links and role=button elements */
-  a:focus-visible,
-  [role="button"]:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  /* Visible keyboard focus for interactive elements — Stage 3.1 */
+  :is(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
     outline-offset: 2px;
     border-radius: 4px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
   }
 }
 
@@ -280,6 +280,36 @@ body {
   a:hover .arrow-shift,
   .group:hover .arrow-shift {
     transform: translateX(2px);
+  }
+
+  /* Hover border glint — a thin accent sweep along the top edge — Stage 3.1 */
+  .surface-glint {
+    position: relative;
+  }
+
+  .surface-glint::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 60%, transparent),
+      transparent
+    );
+    opacity: 0;
+    transition: opacity var(--duration-normal) var(--ease-out-quart);
+    pointer-events: none;
+  }
+
+  .surface-glint:hover::before {
+    opacity: 1;
+  }
+
+  /* Focus highlight for the active asset card under keyboard navigation — Stage 3.1 */
+  .asset-active-ring {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
   }
 
   /* Scroll reveal */

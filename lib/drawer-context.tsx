@@ -13,10 +13,15 @@ import { useAssets } from "@/lib/assets-context";
 interface DrawerContextValue {
   isOpen: boolean;
   currentAssetId: string | null;
-  openDrawer: (assetId: string) => void;
+  /** Persistent index of the "active" asset focus (survives open/close). */
+  activeIndex: number;
+  /** Id of the asset under active focus (derived from activeIndex). */
+  activeAssetId: string | null;
+  /** Opens the drawer for the given asset, or the active-asset when omitted. */
+  openDrawer: (assetId?: string) => void;
   closeDrawer: () => void;
-  nextAsset: () => void;
-  prevAsset: () => void;
+  /** Moves the active focus (and the open drawer) by one, wrapping around. */
+  moveFocus: (delta: 1 | -1) => void;
 }
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
@@ -24,46 +29,62 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 /**
  * Stage 2.1 — Asset detail drawer state.
  *
- * Holds the opened asset id and exposes open/close plus index-based
- * next/prev navigation over the current inventory order, so the card grid can
- * open the slide-over and let users flip between assets with the keyboard.
+ * Holds the opened asset id and a persistent active-focus index over the
+ * current inventory order. The card grid opens the slide-over; the global
+ * hotkey engine (Stage 3.1) navigates active focus with J/K at any time, and
+ * Space toggles the drawer for whatever asset is under focus.
  */
 export function DrawerProvider({ children }: { children: ReactNode }) {
   const { assets } = useAssets();
   const [currentAssetId, setCurrentAssetId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const openDrawer = useCallback((assetId: string) => {
-    setCurrentAssetId(assetId);
-  }, []);
+  const wrapIndex = useCallback(
+    (index: number) => (assets.length === 0 ? 0 : (index + assets.length) % assets.length),
+    [assets.length],
+  );
+
+  const openDrawer = useCallback(
+    (assetId?: string) => {
+      const targetId = assetId ?? assets[wrapIndex(activeIndex)]?.id ?? null;
+      if (!targetId) return;
+      const index = assets.findIndex((a) => a.id === targetId);
+      if (index >= 0) setActiveIndex(index);
+      setCurrentAssetId(targetId);
+    },
+    [assets, activeIndex, wrapIndex],
+  );
 
   const closeDrawer = useCallback(() => {
     setCurrentAssetId(null);
   }, []);
 
-  const navigate = useCallback(
+  const moveFocus = useCallback(
     (delta: 1 | -1) => {
-      if (currentAssetId === null || assets.length === 0) return;
-      const index = assets.findIndex((a) => a.id === currentAssetId);
-      if (index === -1) return;
-      const next = (index + delta + assets.length) % assets.length;
-      setCurrentAssetId(assets[next].id);
+      if (assets.length === 0) return;
+      const baseAssetId = currentAssetId ?? assets[wrapIndex(activeIndex)]?.id ?? null;
+      const baseIndex =
+        baseAssetId === null ? activeIndex : Math.max(0, assets.findIndex((a) => a.id === baseAssetId));
+      const nextIndex = wrapIndex(baseIndex + delta);
+      setActiveIndex(nextIndex);
+      if (currentAssetId !== null) setCurrentAssetId(assets[nextIndex].id);
     },
-    [assets, currentAssetId],
+    [assets, currentAssetId, activeIndex, wrapIndex],
   );
 
-  const nextAsset = useCallback(() => navigate(1), [navigate]);
-  const prevAsset = useCallback(() => navigate(-1), [navigate]);
+  const activeAssetId = assets[wrapIndex(activeIndex)]?.id ?? null;
 
   const value = useMemo<DrawerContextValue>(
     () => ({
       isOpen: currentAssetId !== null,
       currentAssetId,
+      activeIndex,
+      activeAssetId,
       openDrawer,
       closeDrawer,
-      nextAsset,
-      prevAsset,
+      moveFocus,
     }),
-    [currentAssetId, openDrawer, closeDrawer, nextAsset, prevAsset],
+    [currentAssetId, activeIndex, activeAssetId, openDrawer, closeDrawer, moveFocus],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;

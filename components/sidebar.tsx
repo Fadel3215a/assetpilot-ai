@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { DemoResetButton } from "./demo-reset-button";
 import { ReindexButton } from "./reindex-button";
+import { useHotkeys } from "@/lib/hotkeys-context";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
@@ -80,9 +81,19 @@ function ReadyIcon() {
   );
 }
 
+function KeyboardIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+    </svg>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { openLegend } = useHotkeys();
 
   const nav = (
     <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 px-3 py-2">
@@ -165,6 +176,14 @@ export function Sidebar() {
         <div className="mt-auto space-y-2 border-t border-border px-4 py-4">
           <ReindexButton />
           <DemoResetButton />
+          <button
+            type="button"
+            onClick={openLegend}
+            className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-xs transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-quart)] hover:bg-surface-elevated/60 hover:text-foreground text-muted"
+          >
+            <KeyboardIcon />
+            Keyboard shortcuts
+          </button>
           <p className="text-[11px] leading-relaxed text-muted">
             Portfolio demo — simulated AI, session-only state.
           </p>
