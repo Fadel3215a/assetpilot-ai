@@ -11,6 +11,7 @@ interface SearchRequestBody {
   collectionId?: unknown;
   limit?: unknown;
   threshold?: unknown;
+  vectorWeight?: unknown;
 }
 
 /**
@@ -58,14 +59,18 @@ export async function POST(request: Request): Promise<Response> {
   const parsedThreshold = Number(body.threshold);
   const threshold = Number.isFinite(parsedThreshold) ? parsedThreshold : 0;
 
+  const parsedWeight = Number(body.vectorWeight);
+  const vectorWeight = Number.isFinite(parsedWeight) ? Math.min(1, Math.max(0, parsedWeight)) : undefined;
+
   try {
     const { assets, hits } = await hybridSearchAssets({
       query,
       collectionId,
       limit,
       threshold,
+      vectorWeight,
     });
-    return Response.json({ ok: true, count: assets.length, assets, hits });
+    return Response.json({ ok: true, count: assets.length, assets, hits, vectorWeight });
   } catch (error) {
     console.error("search: hybrid search failed", error);
     return Response.json(

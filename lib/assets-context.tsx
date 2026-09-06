@@ -155,7 +155,7 @@ interface AssetsContextValue {
   getAssetTimeline: (assetId: string) => AssetTimelineEntry[];
   searchAssets: (
     query: string,
-    limit?: number,
+    options?: { limit?: number; vectorWeight?: number },
   ) => Promise<{ ok: boolean; error?: string; assets?: Asset[]; hits?: AssetSearchHit[] }>;
   bulkAddTag: (assetIds: string[], tag: string) => void;
   bulkRemoveTag: (assetIds: string[], tag: string) => void;
@@ -837,11 +837,11 @@ export function AssetsProvider({
   );
 
   const searchAssets = useCallback(
-    async (query: string, limit?: number) => {
+    async (query: string, options?: { limit?: number; vectorWeight?: number }) => {
       const trimmed = query.trim();
       if (!trimmed) return { ok: true as const, assets: [] as Asset[], hits: [] as AssetSearchHit[] };
       try {
-        const res = await searchAssetsAction(trimmed, limit ?? 12);
+        const res = await searchAssetsAction(trimmed, options?.limit ?? 12, options?.vectorWeight);
         if (!res.ok || !res.assets) {
           return { ok: false as const, error: res.error ?? "Could not search assets." };
         }

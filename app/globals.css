@@ -36,6 +36,29 @@
   --duration-reveal: 520ms;
 }
 
+html[data-theme="light"] {
+  --background: #f5f7fb;
+  --surface: #ffffff;
+  --surface-elevated: #eef2f7;
+  --foreground: #0f172a;
+  --muted: #5b6b7c;
+  --accent: #00976f;
+  --accent-muted: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-foreground: #0b0f12;
+  --border: #d5dde7;
+  --border-subtle: color-mix(in srgb, var(--border) 70%, transparent);
+  --status-success: #059669;
+  --status-success-muted: color-mix(in srgb, var(--status-success) 12%, transparent);
+  --status-warning: #d97706;
+  --status-warning-muted: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  --status-danger: #dc2626;
+  --status-danger-muted: color-mix(in srgb, var(--status-danger) 12%, transparent);
+  --status-neutral: #64748b;
+  --status-neutral-muted: color-mix(in srgb, var(--status-neutral) 12%, transparent);
+  --status-ai: #00976f;
+  --status-ai-muted: color-mix(in srgb, var(--status-ai) 10%, transparent);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);

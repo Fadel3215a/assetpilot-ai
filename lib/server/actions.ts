@@ -1661,6 +1661,7 @@ export async function fetchFeedAction(): Promise<{
 export async function searchAssetsAction(
   query: string,
   limit = 12,
+  vectorWeight?: number,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -1672,7 +1673,7 @@ export async function searchAssetsAction(
 
   try {
     await assertServerRole("VIEWER");
-    const { assets, hits } = await hybridSearchAssets({ query: trimmed, limit });
+    const { assets, hits } = await hybridSearchAssets({ query: trimmed, limit, vectorWeight });
     return { ok: true, assets, hits };
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: error.message };

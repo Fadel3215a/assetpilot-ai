@@ -70,6 +70,8 @@ export interface HybridSearchOptions {
   collectionId?: string;
   limit?: number;
   threshold?: number;
+  /** Vector-vs-text blend in [0, 1]; 1 = pure vector, 0 = pure full-text. Default 0.55. */
+  vectorWeight?: number;
 }
 
 export interface HybridSearchResult {
@@ -105,9 +107,13 @@ export async function hybridSearchAssets({
   collectionId,
   limit = 12,
   threshold = 0,
+  vectorWeight = 0.55,
 }: HybridSearchOptions): Promise<HybridSearchResult> {
   const trimmed = query.trim();
   if (!trimmed) return { assets: [], hits: [] };
+
+  const vw = Math.min(1, Math.max(0, Number(vectorWeight) || 0));
+  const twist = 1 - vw;
 
   const embedding = await generateEmbedding(trimmed);
   const vectorLiteral = `[${embedding.join(",")}]`;
@@ -139,9 +145,9 @@ export async function hybridSearchAssets({
     SELECT n."id",
            n."vectorScore",
            n."textScore",
-           (0.55 * n."vectorScore" + 0.45 * n."textScore") AS "score"
+           (${vw} * n."vectorScore" + ${twist} * n."textScore") AS "score"
     FROM normalized n
-    WHERE (0.55 * n."vectorScore" + 0.45 * n."textScore") >= ${Number(threshold) || 0}
+    WHERE (${vw} * n."vectorScore" + ${twist} * n."textScore") >= ${Number(threshold) || 0}
     ORDER BY "score" DESC
     LIMIT ${Math.max(1, Math.min(100, Number(limit) || 12))}
   `;

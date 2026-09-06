@@ -2,6 +2,7 @@ import { Breadcrumbs, type BreadcrumbItem } from "./breadcrumbs";
 import { NavIdentity } from "./nav-identity";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { CommandBar } from "./command-bar";
 
 interface AppShellProps {
   title?: string;
@@ -24,7 +25,8 @@ export function AppShell({
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col lg:ml-0">
-        <div className="flex items-center justify-end border-b border-border bg-background/60 px-6 py-2 lg:px-10">
+        <div className="flex items-center justify-end gap-3 border-b border-border bg-background/60 px-6 py-2 lg:px-10">
+          <CommandBar />
           <NavIdentity />
         </div>
         {!hideHeader && title && (
