@@ -17,7 +17,7 @@ import {
   type RenditionPaths,
 } from "@/lib/renditions";
 import { statusFromDecision } from "@/lib/utils";
-import { indexAsset, searchAssets } from "@/lib/search";
+import { indexAsset } from "@/lib/search";
 import { evaluateCurationRules, type CurationEvaluation } from "@/lib/curation-rules";
 import { buildExportZip } from "@/lib/export";
 import { assertServerRole, AuthError } from "@/lib/auth";
@@ -49,6 +49,7 @@ import {
   getComparisons,
   getFeedbackEntries,
   getIgnoredDuplicateIds,
+  hybridSearchAssets,
 } from "@/lib/server/queries";
 import type {
   ActivityItem,
@@ -1670,22 +1671,8 @@ export async function searchAssetsAction(
 
   try {
     await assertServerRole("VIEWER");
-    const hits = await searchAssets(trimmed, limit);
-    if (hits.length === 0) return { ok: true, assets: [], hits: [] };
-
-    const assets: Asset[] = [];
-    for (const hit of hits) {
-      const asset = await getAssetById(hit.assetId);
-      if (asset) assets.push(asset);
-    }
-
-    // Ensure the returned assets mirror the ranked hit order.
-    const byId = new Map(assets.map((a) => [a.id, a]));
-    const ordered = hits
-      .map((h) => byId.get(h.assetId))
-      .filter((a): a is Asset => Boolean(a));
-
-    return { ok: true, assets: ordered, hits };
+    const { assets, hits } = await hybridSearchAssets({ query: trimmed, limit });
+    return { ok: true, assets, hits };
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("searchAssetsAction failed", error);

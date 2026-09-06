@@ -200,6 +200,7 @@ export const config = {
     "/api/export/stream",
     "/api/jobs/:path*",
     "/api/storage/presigned-url",
+    "/api/search",
     "/curation/:path*",
     "/reviews/:path*",
     "/production-ready/:path*",
