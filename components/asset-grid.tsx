@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "framer-motion";
 import { useAssets } from "@/lib/assets-context";
 import { defaultAssetFilters, filterAssets } from "@/lib/asset-search";
 import { assetHasMetadataIssues } from "@/lib/duplicate-detection";
@@ -10,7 +11,13 @@ import { AssetFilters } from "./asset-filters";
 import { AssetUpload } from "./asset-upload";
 import { BulkActionsBar } from "./bulk-actions-bar";
 import { EmptyState } from "./empty-state";
-import { getVisualGridClasses, getVisualGridVariant } from "@/lib/visual-grid";
+
+const itemTransition = {
+  opacity: { duration: 0.22, ease: "easeOut" },
+  y: { type: "spring", stiffness: 340, damping: 30 },
+  scale: { type: "spring", stiffness: 340, damping: 30 },
+  layout: { type: "spring", stiffness: 300, damping: 32 },
+} as const;
 
 export function AssetGrid() {
   const { assets, collections, getDuplicateCandidates } = useAssets();
@@ -104,23 +111,33 @@ export function AssetGrid() {
           onAction={() => setFilters(defaultAssetFilters)}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
-          {filtered.map((asset, index) => {
-            const variant = getVisualGridVariant(index);
-            return (
-              <div key={asset.id} className={getVisualGridClasses(variant)}>
-                <AssetCard
-                  asset={asset}
-                  collection={collectionMap.get(asset.collectionId)}
-                  bulkMode={bulkMode}
-                  selected={selectedIds.includes(asset.id)}
-                  onToggleSelect={() => toggleSelect(asset.id)}
-                  variant={variant}
-                />
-              </div>
-            );
-          })}
-        </div>
+        <MotionConfig reducedMotion="user">
+          <LayoutGroup>
+            <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4 xl:gap-5">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {filtered.map((asset) => (
+                  <motion.div
+                    key={asset.id}
+                    layout
+                    initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.96 }}
+                    transition={itemTransition}
+                    className="mb-4 break-inside-avoid xl:mb-5"
+                  >
+                    <AssetCard
+                      asset={asset}
+                      collection={collectionMap.get(asset.collectionId)}
+                      bulkMode={bulkMode}
+                      selected={selectedIds.includes(asset.id)}
+                      onToggleSelect={() => toggleSelect(asset.id)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </LayoutGroup>
+        </MotionConfig>
       )}
     </div>
   );
