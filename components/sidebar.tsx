@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { DemoResetButton } from "./demo-reset-button";
+import { ReindexButton } from "./reindex-button";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
   { href: "/assets", label: "Asset Library", icon: LibraryIcon },
+  { href: "/search", label: "Search", icon: SearchIcon },
   { href: "/curation", label: "Curation Queue", icon: QueueIcon },
   { href: "/collections", label: "Collections", icon: CollectionsIcon },
   { href: "/reviews", label: "Reviews", icon: ReviewsIcon },
@@ -32,6 +34,15 @@ function LibraryIcon() {
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
       <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
     </svg>
   );
 }
@@ -152,6 +163,7 @@ export function Sidebar() {
         </div>
         {nav}
         <div className="mt-auto space-y-2 border-t border-border px-4 py-4">
+          <ReindexButton />
           <DemoResetButton />
           <p className="text-[11px] leading-relaxed text-muted">
             Portfolio demo — simulated AI, session-only state.

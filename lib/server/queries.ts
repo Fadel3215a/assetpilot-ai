@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { generateEmbedding } from "@/lib/ai/embeddings";
+import { indexAsset } from "@/lib/search";
 import {
   toDomainActivity,
   toDomainAsset,
@@ -172,4 +173,48 @@ export async function hybridSearchAssets({
   });
 
   return { assets, hits };
+}
+
+export interface ReindexResult {
+  count: number;
+  failed: number;
+  durationMs: number;
+}
+
+const REINDEX_BATCH_SIZE = 10;
+
+/**
+ * Stage 4.2 — Rebuilds the hybrid search index for the whole inventory.
+ *
+ * Iterates every asset in batches of `REINDEX_BATCH_SIZE`, re-deriving each
+ * asset's `searchText` and a fresh pgvector embedding via `indexAsset`
+ * (OpenAI → Gemini → deterministic fallback). Batches run concurrently so a
+ * full re-index is dominated by embedding generation latency, not the round
+ * trips. Individual failures are swallowed and counted so one bad row cannot
+ * abort a full re-index. Returns the processed count, failures, and wall-clock
+ * timing in milliseconds.
+ */
+export async function reindexAllAssets(): Promise<ReindexResult> {
+  const [assets, collections] = await Promise.all([getAssets(), getCollections()]);
+  const collectionNames = new Map(collections.map((c) => [c.id, c.name]));
+
+  const started = performance.now();
+  let failed = 0;
+
+  for (let i = 0; i < assets.length; i += REINDEX_BATCH_SIZE) {
+    const batch = assets.slice(i, i + REINDEX_BATCH_SIZE);
+    const outcomes = await Promise.all(
+      batch.map((asset) =>
+        indexAsset(asset, collectionNames.get(asset.collectionId))
+          .then(() => true)
+          .catch((error) => {
+            console.error(`reindex: failed for asset ${asset.id}`, error);
+            return false;
+          }),
+      ),
+    );
+    failed += outcomes.filter((ok) => !ok).length;
+  }
+
+  return { count: assets.length, failed, durationMs: Math.round(performance.now() - started) };
 }

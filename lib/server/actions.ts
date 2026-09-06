@@ -50,6 +50,7 @@ import {
   getFeedbackEntries,
   getIgnoredDuplicateIds,
   hybridSearchAssets,
+  reindexAllAssets,
 } from "@/lib/server/queries";
 import type {
   ActivityItem,
@@ -1677,6 +1678,31 @@ export async function searchAssetsAction(
     if (error instanceof AuthError) return { ok: false, error: error.message };
     console.error("searchAssetsAction failed", error);
     return { ok: false, error: "Could not search assets. Please try again." };
+  }
+}
+
+/**
+ * Stage 4.2 — Full inventory re-index for hybrid search.
+ *
+ * CURATOR+ only. Rebuilds `searchText` + pgvector embeddings for every asset
+ * in batches (see `reindexAllAssets`) and reports the processed count, any
+ * per-asset failures, and the total wall-clock duration.
+ */
+export async function reindexAllAssetsAction(): Promise<{
+  ok: boolean;
+  error?: string;
+  count?: number;
+  failed?: number;
+  durationMs?: number;
+}> {
+  try {
+    await assertServerRole("CURATOR");
+    const result = await reindexAllAssets();
+    return { ok: true, count: result.count, failed: result.failed, durationMs: result.durationMs };
+  } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
+    console.error("reindexAllAssetsAction failed", error);
+    return { ok: false, error: "Could not rebuild the search index. Please try again." };
   }
 }
 

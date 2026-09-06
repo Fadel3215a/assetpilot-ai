@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { Asset, Collection } from "@/types";
+import type { Asset, AssetSearchHit, Collection } from "@/types";
 import type { VisualGridVariant } from "@/lib/visual-grid";
 import { useAssets } from "@/lib/assets-context";
 import { assetTypeLabel, getCurrentVersion } from "@/lib/utils";
 import { AssetThumbnail } from "./asset-thumbnail";
+import { SearchMatchBadge } from "./search-match-badge";
 import { StatusBadge } from "./status-badge";
 
 interface AssetCardProps {
@@ -15,6 +16,7 @@ interface AssetCardProps {
   selected?: boolean;
   onToggleSelect?: () => void;
   variant?: VisualGridVariant;
+  hit?: AssetSearchHit;
 }
 
 const thumbnailAspect: Record<VisualGridVariant, string> = {
@@ -30,6 +32,7 @@ export function AssetCard({
   selected = false,
   onToggleSelect,
   variant = "standard",
+  hit,
 }: AssetCardProps) {
   const { getAssetHealth } = useAssets();
   const version = getCurrentVersion(asset);
@@ -49,13 +52,16 @@ export function AssetCard({
       </div>
       <div className={`flex flex-1 flex-col gap-2 ${isFeatured ? "p-4" : "p-3"}`}>
         <div className="flex items-start justify-between gap-2">
-          <h3
-            className={`line-clamp-2 font-semibold text-foreground group-hover:text-accent ${
-              isFeatured ? "text-base sm:text-lg" : "text-sm"
-            }`}
-          >
-            {asset.name}
-          </h3>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h3
+              className={`line-clamp-2 font-semibold text-foreground group-hover:text-accent ${
+                isFeatured ? "text-base sm:text-lg" : "text-sm"
+              }`}
+            >
+              {asset.name}
+            </h3>
+            {hit && <SearchMatchBadge hit={hit} />}
+          </div>
           <StatusBadge status={asset.status} />
         </div>
 
