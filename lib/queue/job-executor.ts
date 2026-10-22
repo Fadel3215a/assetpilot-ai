@@ -71,12 +71,12 @@ function runExportZip(
 
     let assets: Asset[];
     if (collectionId) {
-      const all = await getAssets();
+      const all = await getAssets(data.workspaceId);
       assets = all.filter((a) => a.collectionId === collectionId);
     } else if (assetIds.length > 0) {
       const loaded: Asset[] = [];
       for (const id of assetIds) {
-        const asset = await getAssetById(id);
+        const asset = await getAssetById(id, data.workspaceId);
         if (asset) loaded.push(asset);
       }
       assets = loaded;
@@ -88,7 +88,7 @@ function runExportZip(
       throw new Error("No assets matched the export request.");
     }
 
-    const collections = await getCollections();
+    const collections = await getCollections(data.workspaceId);
     const collection =
       collectionId ? collections.find((c) => c.id === collectionId) : undefined;
     const label =
@@ -125,15 +125,15 @@ function runConvertRendition(
 
     let assets: Asset[];
     if (assetId) {
-      const asset = await getAssetById(assetId);
+      const asset = await getAssetById(assetId, data.workspaceId);
       assets = asset ? [asset] : [];
     } else if (collectionId) {
-      const all = await getAssets();
+      const all = await getAssets(data.workspaceId);
       assets = all.filter((a) => a.collectionId === collectionId);
     } else if (assetIds.length > 0) {
       const loaded: Asset[] = [];
       for (const id of assetIds) {
-        const asset = await getAssetById(id);
+        const asset = await getAssetById(id, data.workspaceId);
         if (asset) loaded.push(asset);
       }
       assets = loaded;
@@ -248,12 +248,12 @@ function runConvertRendition(
 }
 
 function runReindexVectors(
-  _data: ReindexVectorsJobData,
+  data: ReindexVectorsJobData,
   report: BackgroundJobContext["report"],
 ): Promise<unknown> {
   return (async () => {
     report(5, "Loading inventory…");
-    const result = await reindexAllAssets((processed, total) => {
+    const result = await reindexAllAssets(data.workspaceId, (processed, total) => {
       report(10 + Math.round((processed / total) * 80), `Re-indexing ${processed}/${total}…`);
     });
 

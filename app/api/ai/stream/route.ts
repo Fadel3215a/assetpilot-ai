@@ -15,7 +15,7 @@ import { inferUploadCategory, mapCategoryToAssetType } from "@/lib/file-metadata
 import { parseExtractedMetadata } from "@/lib/server/mappers";
 import { getAssetById, getCollections } from "@/lib/server/queries";
 import { buildUploadedAsset } from "@/lib/upload-asset";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { AIAnalysis, Asset } from "@/types";
 
 export const runtime = "nodejs";
@@ -110,8 +110,9 @@ async function* geminiStream(target: AnalyzeTarget): AsyncGenerator<string> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "CURATOR");
+  const auth = await requireRequestWorkspace(request, "CURATOR");
   if (auth instanceof Response) return auth;
+  const { workspaceId } = auth;
 
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -128,7 +129,7 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       const extracted = parseExtractedMetadata(JSON.parse(extractedRaw));
-      const collections = await getCollections();
+      const collections = await getCollections(workspaceId);
       const category = inferUploadCategory(file);
       const type = mapCategoryToAssetType(category);
       const assetId = `asset-stream-${Date.now()}`;
@@ -160,7 +161,10 @@ export async function POST(request: Request): Promise<Response> {
       if (typeof assetId !== "string" || !assetId) {
         return Response.json({ ok: false, error: "assetId is required." }, { status: 400 });
       }
-      const [asset, collections] = await Promise.all([getAssetById(assetId), getCollections()]);
+      const [asset, collections] = await Promise.all([
+        getAssetById(assetId, workspaceId),
+        getCollections(workspaceId),
+      ]);
       if (!asset || !collections) {
         return Response.json({ ok: false, error: "Asset not found." }, { status: 404 });
       }

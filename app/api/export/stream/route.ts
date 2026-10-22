@@ -1,5 +1,5 @@
 import { getAssetById, getAssets } from "@/lib/server/queries";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import { createZipArchiveStream } from "@/lib/export-stream";
 import type { Asset } from "@/types";
 
@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
  * browser with no server-side file buffering. Guarded to VIEWER and above.
  */
 export async function POST(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
+  const { workspaceId } = auth;
 
   let body: unknown;
   try {
@@ -48,12 +49,12 @@ export async function POST(request: Request): Promise<Response> {
   let assets: Asset[];
   try {
     if (collectionId) {
-      const all = await getAssets();
+      const all = await getAssets(workspaceId);
       assets = all.filter((a) => a.collectionId === collectionId);
     } else {
       const loaded: Asset[] = [];
       for (const id of assetIds) {
-        const asset = await getAssetById(id);
+        const asset = await getAssetById(id, workspaceId);
         if (asset) loaded.push(asset);
       }
       assets = loaded;

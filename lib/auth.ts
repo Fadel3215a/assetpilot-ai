@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { ROLE_LEVEL, type SessionUser, type UserRole } from "@/types";
 
@@ -11,18 +10,13 @@ import { ROLE_LEVEL, type SessionUser, type UserRole } from "@/types";
  * inheritance: canRead = level >= VIEWER, canCurate = level >= CURATOR,
  * canAdminister = level >= ADMIN.
  *
- * Since Stage 3.1 the caller's role is resolved from the active Auth.js session
- * via auth() when one exists (JWT stamps id + role). Where no session is active
- * the helpers fall back to the `x-user-role` request header (set by proxy.ts or
- * passed explicitly by service-to-service callers), and finally to the
- * `DEMO_USER_ROLE` env override so the sample workspace remains usable without
- * a login system.
+ * Authorization is deny-by-default: the caller's role comes from the active
+ * Auth.js session (JWT stamps id + role) or, for service-to-service traffic,
+ * from a valid `x-api-key` matching the `API_KEYS` allowlist. Client-supplied
+ * role/identity headers are never trusted.
  */
 
-export const ROLE_HEADER = "x-user-role";
 export const API_KEY_HEADER = "x-api-key";
-
-const DEMO_ROLE_ENV = "DEMO_USER_ROLE";
 
 export class AuthError extends Error {
   readonly status: number;
@@ -67,26 +61,21 @@ export function assertCan(required: UserRole, role: UserRole | null | undefined)
   }
 }
 
-/** Reads the caller's role from an arbitrary Headers object. */
-export function getRoleFromHeaders(h: Headers): UserRole | null {
-  return parseRole(h.get(ROLE_HEADER));
-}
-
-/** Reads the caller's role from a Request (route handlers / proxy). */
-export function getRoleFromRequest(request: Request): UserRole | null {
-  return getRoleFromHeaders(request.headers);
-}
-
-function demoRole(): UserRole {
-  const envRole = parseRole(process.env[DEMO_ROLE_ENV]);
-  return envRole ?? "ADMIN";
+/** Returns ADMIN when the request carries a configured service API key. */
+export function apiKeyRoleFromRequest(request: Request): UserRole | null {
+  const key = request.headers.get(API_KEY_HEADER);
+  if (!key) return null;
+  const keys = (process.env.API_KEYS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return keys.length > 0 && keys.includes(key) ? "ADMIN" : null;
 }
 
 /**
  * Reads the role of the active Auth.js session, or null when signed out. This
- * is the authoritative role when a session cookie is present; header and env
- * fallbacks below apply otherwise. Wrapped defensively because auth() requires
- * a request-scoped cookie context that some non-request call paths lack.
+ * is the authoritative role for browser callers. Wrapped defensively because
+ * auth() requires a request-scoped cookie context that some call paths lack.
  */
 export async function sessionRole(): Promise<UserRole | null> {
   try {
@@ -97,31 +86,26 @@ export async function sessionRole(): Promise<UserRole | null> {
   }
 }
 
-/** Resolves the current request's role in a server action (via next/headers). */
+/** Resolves the current request's role; throws 401 when signed out. */
 export async function resolveServerRole(): Promise<UserRole> {
-  const session = await sessionRole();
-  if (session) return session;
-  const h = await headers();
-  return getRoleFromHeaders(h) ?? demoRole();
+  const role = await sessionRole();
+  if (!role) {
+    throw new AuthError("Authentication required.", 401, "UNAUTHENTICATED");
+  }
+  return role;
 }
 
-/** Builder for the SessionUser view of the current request. */
+/** Builder for the SessionUser view; throws 401 when signed out. */
 export async function resolveSessionUser(): Promise<SessionUser> {
   const session = await auth();
-  if (session?.user?.id) {
-    return {
-      id: session.user.id,
-      name: session.user.name ?? "User",
-      email: session.user.email ?? undefined,
-      role: parseRole(session.user.role) ?? demoRole(),
-    };
+  const role = parseRole(session?.user?.role);
+  if (!session?.user?.id || !role) {
+    throw new AuthError("Authentication required.", 401, "UNAUTHENTICATED");
   }
-  const h = await headers();
-  const role = getRoleFromHeaders(h) ?? demoRole();
   return {
-    id: h.get("x-user-id") ?? "system",
-    name: h.get("x-user-name") ?? "Demo User",
-    email: h.get("x-user-email") ?? undefined,
+    id: session.user.id,
+    name: session.user.name ?? "User",
+    email: session.user.email ?? undefined,
     role,
   };
 }
@@ -137,16 +121,14 @@ export async function assertServerRole(required: UserRole): Promise<void> {
 /**
  * Route-handler assertion helper. Validates the Request's role and returns a
  * JSON error Response (suitable for immediate return) or null when allowed.
- * Authorization is sourced from the active Auth.js session first; when no
- * session exists the `x-user-role` header (proxy-attached or explicit) is
- * honored, preserving the pre-NextAuth service-to-service call pattern.
+ * Authorization is sourced from the active Auth.js session or a configured
+ * service API key; client-supplied role headers are ignored.
  */
 export async function requireRequestRole(
   request: Request,
   required: UserRole,
 ): Promise<{ ok: true; role: UserRole } | Response> {
-  const session = await sessionRole();
-  const role = session ?? getRoleFromRequest(request);
+  const role = (await sessionRole()) ?? apiKeyRoleFromRequest(request);
   if (!role) {
     return unauthorized(`Authentication required.`);
   }

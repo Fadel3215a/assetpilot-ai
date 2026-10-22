@@ -41,6 +41,11 @@ export interface IngestionJobData {
   mimeType: string;
   /** Id of the collection the asset should be filed under. */
   collectionId: string;
+  /**
+   * P0.2 — owning workspace, stamped server-side when the job is enqueued.
+   * Workers re-validate it against the database before any read or write.
+   */
+  workspaceId: string;
 }
 
 /**
@@ -50,6 +55,8 @@ export interface IngestionJobData {
 export interface AIAnalysisJobData {
   assetId: string;
   versionId: string;
+  /** P0.2 — owning workspace, stamped server-side at enqueue time. */
+  workspaceId: string;
   /**
    * Which analyses to run, e.g. ["compactMetadata", "tags",
    * "productionReadiness"]. Kept open-ended so callers can request a subset.
@@ -68,6 +75,8 @@ export interface RenditionJobData {
   filePath: string;
   /** Media type, e.g. "image" | "video" | "audio". */
   mediaType: string;
+  /** P0.2 — owning workspace, stamped server-side at enqueue time. */
+  workspaceId: string;
 }
 
 /**
@@ -83,6 +92,8 @@ export type BackgroundJobType =
 
 /** Selects which assets an EXPORT_ZIP job packages. */
 export interface ExportZipJobData {
+  /** P0.2 — owning workspace, stamped server-side at enqueue time. */
+  workspaceId: string;
   assetIds?: string[];
   collectionId?: string;
   label?: string;
@@ -95,6 +106,8 @@ export interface ExportZipJobData {
  * version is used (or the current version of every selected asset for bulk).
  */
 export interface ConvertRenditionJobData {
+  /** P0.2 — owning workspace, stamped server-side at enqueue time. */
+  workspaceId: string;
   /** Single-asset target. Optional when assetIds[] or collectionId is set. */
   assetId?: string;
   /** The specific version to regenerate. Defaults to the asset's current version. */
@@ -107,6 +120,8 @@ export interface ConvertRenditionJobData {
 
 /** Invalidates + rebuilds the inventory's hybrid search embeddings. */
 export interface ReindexVectorsJobData {
+  /** P0.2 — owning workspace, stamped server-side at enqueue time. */
+  workspaceId: string;
   collectionId?: string;
 }
 
@@ -123,6 +138,12 @@ export type BackgroundJobData =
 export interface BackgroundJobState {
   id: string;
   type: BackgroundJobType;
+  /**
+   * P0.2 — workspace that owns this job. Job reads/writes are only valid while
+   * this still matches the caller's resolved workspace (enforced by
+   * lib/server/workspace-policy.ts `jobStateMatchesWorkspace`).
+   */
+  workspaceId: string;
   status: JobStatus;
   progressPercent: number;
   stepLabel: string;

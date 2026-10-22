@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { DemoAccount } from "@/lib/server/demo-accounts";
 import { LoginModal } from "@/components/login-modal";
 
 /**
@@ -26,7 +27,13 @@ interface LoginGateContextValue {
 
 const LoginGateContext = createContext<LoginGateContextValue | null>(null);
 
-export function LoginGateProvider({ children }: { children: ReactNode }) {
+export function LoginGateProvider({
+  children,
+  demoAccounts = [],
+}: {
+  children: ReactNode;
+  demoAccounts?: readonly DemoAccount[];
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   const openLogin = useCallback(() => setIsOpen(true), []);
@@ -40,7 +47,7 @@ export function LoginGateProvider({ children }: { children: ReactNode }) {
   return (
     <LoginGateContext.Provider value={value}>
       {children}
-      <LoginModal open={isOpen} onClose={closeLogin} />
+      <LoginModal open={isOpen} onClose={closeLogin} demoAccounts={demoAccounts} />
     </LoginGateContext.Provider>
   );
 }

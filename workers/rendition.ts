@@ -28,7 +28,20 @@ function report(job: Job<RenditionJobData>, progressPercent: number, stepLabel: 
 }
 
 async function processRendition(job: Job<RenditionJobData>): Promise<void> {
-  const { assetId, versionId, filePath, mediaType } = job.data;
+  const { assetId, versionId, filePath, mediaType, workspaceId } = job.data;
+  if (!workspaceId) {
+    throw new Error("Rendition: job payload is missing workspace context");
+  }
+
+  // P0.2 — fail fast (and fail closed) unless the target version belongs to an
+  // asset inside the job's own workspace.
+  const owned = await prisma.assetVersion.findFirst({
+    where: { id: versionId, asset: { workspaceId } },
+    select: { id: true },
+  });
+  if (!owned) {
+    throw new Error(`Rendition: version ${versionId} not found in this workspace`);
+  }
 
   const ext = fileExtensionOf(filePath) || path.extname(filePath).toLowerCase();
 

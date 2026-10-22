@@ -3,6 +3,9 @@ import { collections } from "@/data/collections";
 import { mockActivity, rawMockAssets } from "@/data/mock-assets";
 import { mockComparisons } from "@/data/mock-comparisons";
 import { withTransaction } from "@/lib/db";
+import { isDemoModeEnabled } from "@/lib/demo-mode";
+import { hashPassword } from "@/lib/passwords";
+import { DEMO_ACCOUNTS } from "@/lib/server/demo-accounts";
 import { indexCollection } from "@/lib/search";
 import { parseSessionState } from "@/lib/server/mappers";
 import {
@@ -14,54 +17,83 @@ import {
   versionToRow,
 } from "@/lib/server/persist";
 
-export async function resetDemoData(): Promise<void> {
-  // Seeding wipes every table and recreates the full demo dataset inside a
-  // single interactive transaction. Against remote Postgres (e.g. Neon) the
-  // per-statement network latency can exceed the default 120s budget, so the
-  // reset runs with a generous timeout to allow the operation to complete.
+/**
+ * P0.2 — resets ONE workspace: every content row owned by `workspaceId` is
+ * wiped and the demo dataset is recreated inside it.
+ *
+ * Deliberately NOT global anymore:
+ *   - rows are filtered by workspaceId (assets, collections, activity,
+ *     comparisons, ignored duplicates; nested rows cascade via their asset);
+ *   - users are NEVER bulk-deleted. Only the seeded demo identities are
+ *     upserted and only THEIR sessions/accounts/tokens are cleared, so a reset
+ *     can neither destroy production accounts nor touch another workspace.
+ */
+export async function resetDemoData(workspaceId: string): Promise<void> {
+  // Demo data (and the demo identities below) only exist in demo mode. This
+  // prevents `prisma db seed` / the reset action from wiping a production
+  // database or re-creating known-credential accounts.
+  if (!isDemoModeEnabled()) {
+    throw new Error(
+      "Demo data reset is disabled. Set NEXT_PUBLIC_DEMO_MODE=true to enable demo mode.",
+    );
+  }
+
+  // Stage 3.1 — demo identities for the Credentials login. Passwords are
+  // stored only as bcrypt hashes.
+  const demoUsers = await Promise.all(
+    DEMO_ACCOUNTS.map(async (account) => ({
+      email: account.email,
+      name: account.name,
+      password: await hashPassword(account.password),
+      role: account.role,
+    })),
+  );
+  const demoEmails = demoUsers.map((u) => u.email);
+
+  // Seeding wipes the workspace's content and recreates the full demo dataset
+  // inside a single interactive transaction. Against remote Postgres (e.g.
+  // Neon) the per-statement network latency can exceed the default 120s
+  // budget, so the reset runs with a generous timeout.
   let seededAssets: ReturnType<typeof enrichMockAssets> = [];
   await withTransaction(
     async (tx) => {
-      await tx.curatorFeedbackEntry.deleteMany();
-      await tx.decisionHistoryEntry.deleteMany();
-      await tx.assetVersion.deleteMany();
-      await tx.activityItem.deleteMany();
-      await tx.comparisonRecord.deleteMany();
-      await tx.ignoredDuplicate.deleteMany();
-      await tx.asset.deleteMany();
-      await tx.collection.deleteMany();
-      await tx.verificationToken.deleteMany();
-      await tx.account.deleteMany();
-      await tx.session.deleteMany();
-      await tx.user.deleteMany();
+      await tx.curatorFeedbackEntry.deleteMany({ where: { asset: { workspaceId } } });
+      await tx.decisionHistoryEntry.deleteMany({ where: { asset: { workspaceId } } });
+      await tx.assetVersion.deleteMany({ where: { asset: { workspaceId } } });
+      await tx.activityItem.deleteMany({ where: { workspaceId } });
+      await tx.comparisonRecord.deleteMany({ where: { workspaceId } });
+      await tx.ignoredDuplicate.deleteMany({ where: { workspaceId } });
+      await tx.asset.deleteMany({ where: { workspaceId } });
+      await tx.collection.deleteMany({ where: { workspaceId } });
+
+      // Demo identities: upserted, never globally deleted. Stale credentials
+      // for these accounts (old password hashes, sessions) are invalidated.
+      const demoUserIds: string[] = [];
+      for (const user of demoUsers) {
+        const row = await tx.user.upsert({
+          where: { email: user.email },
+          create: { email: user.email, name: user.name, password: user.password, role: user.role },
+          update: { name: user.name, password: user.password, role: user.role },
+        });
+        demoUserIds.push(row.id);
+      }
+      await tx.session.deleteMany({ where: { userId: { in: demoUserIds } } });
+      await tx.account.deleteMany({ where: { userId: { in: demoUserIds } } });
+      await tx.verificationToken.deleteMany({ where: { identifier: { in: demoEmails } } });
+
+      // Demo identities must be able to resolve THIS workspace, including on a
+      // freshly seeded database where the ownership migration had no rows to
+      // backfill. Upserts keep other workspaces and memberships untouched.
+      for (const userId of demoUserIds) {
+        await tx.workspaceMember.upsert({
+          where: { workspaceId_userId: { workspaceId, userId } },
+          create: { id: `wsm-${workspaceId}-${userId}`, workspaceId, userId },
+          update: {},
+        });
+      }
 
       await tx.collection.createMany({
-        data: collections.map((c) => ({ ...c })),
-      });
-
-      // Stage 3.1 — demo identities for the Credentials login (plaintext demo
-      // passwords; swap for bcrypt/argon2 before production sign-in is exposed).
-      await tx.user.createMany({
-        data: [
-          {
-            email: "demo@assetpilot.ai",
-            name: "Demo User",
-            password: "demo1234",
-            role: "VIEWER",
-          },
-          {
-            email: "curator@assetpilot.ai",
-            name: "Curator User",
-            password: "curator1234",
-            role: "CURATOR",
-          },
-          {
-            email: "admin@assetpilot.ai",
-            name: "Admin User",
-            password: "admin1234",
-            role: "ADMIN",
-          },
-        ],
+        data: collections.map((c) => ({ ...c, workspaceId })),
       });
 
       seededAssets = enrichMockAssets(rawMockAssets);
@@ -69,6 +101,7 @@ export async function resetDemoData(): Promise<void> {
         await tx.asset.create({
           data: {
             ...assetColumns(asset),
+            workspaceId,
             aiSessionState: toJsonInput(parseSessionState(null)),
             versions: {
               create: asset.versions.map((v) => versionToRow(v)),
@@ -82,13 +115,13 @@ export async function resetDemoData(): Promise<void> {
 
       if (mockComparisons.length > 0) {
         await tx.comparisonRecord.createMany({
-          data: mockComparisons.map(comparisonToRow),
+          data: mockComparisons.map((c) => ({ ...comparisonToRow(c), workspaceId })),
         });
       }
 
       if (mockActivity.length > 0) {
         await tx.activityItem.createMany({
-          data: mockActivity.map(activityToRow),
+          data: mockActivity.map((a) => ({ ...activityToRow(a), workspaceId })),
         });
       }
     },

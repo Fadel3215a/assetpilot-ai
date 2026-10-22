@@ -2,7 +2,7 @@ import { open } from "node:fs/promises";
 import { getAssetById } from "@/lib/server/queries";
 import { resolveMediaFile } from "@/lib/export";
 import { enqueueBackgroundJob } from "@/lib/queue/jobs";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import { getCurrentVersion } from "@/lib/utils";
 import type { AssetVersion, ConvertRenditionJobData } from "@/types";
 
@@ -66,7 +66,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   const { id } = await params;
@@ -74,7 +74,7 @@ export async function GET(
     return Response.json({ ok: false, error: "Missing asset id." }, { status: 400 });
   }
 
-  const asset = await getAssetById(id);
+  const asset = await getAssetById(id, auth.workspaceId);
   if (!asset) {
     return Response.json({ ok: false, error: "Asset not found." }, { status: 404 });
   }
@@ -99,7 +99,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await requireRequestRole(request, "CURATOR");
+  const auth = await requireRequestWorkspace(request, "CURATOR");
   if (auth instanceof Response) return auth;
 
   const { id } = await params;
@@ -107,7 +107,7 @@ export async function POST(
     return Response.json({ ok: false, error: "Missing asset id." }, { status: 400 });
   }
 
-  const asset = await getAssetById(id);
+  const asset = await getAssetById(id, auth.workspaceId);
   if (!asset) {
     return Response.json({ ok: false, error: "Asset not found." }, { status: 404 });
   }
@@ -128,6 +128,7 @@ export async function POST(
   }
 
   const data: ConvertRenditionJobData = {
+    workspaceId: auth.workspaceId,
     assetId: id,
     ...(versionId ? { versionId } : {}),
   };

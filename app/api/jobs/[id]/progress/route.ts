@@ -6,7 +6,8 @@ import {
   renditionQueue,
 } from "@/lib/queue/queues";
 import { jobStore } from "@/lib/queue/job-store";
-import { requireRequestRole } from "@/lib/auth";
+import { jobStateMatchesWorkspace } from "@/lib/server/workspace-policy";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { BackgroundJobState, JobProgressPayload, JobStatus } from "@/types";
 
 export const runtime = "nodejs";
@@ -70,15 +71,23 @@ function progressOf(raw: unknown): RawProgress {
 /**
  * Searches every queue for the job and returns a normalized progress payload,
  * or null when the job is not present in any queue.
+ *
+ * P0.2 — jobs whose payload workspace does not match the caller's workspace
+ * (including payloads too old to carry one) answer exactly like ids that are
+ * not present in any queue.
  */
 async function findJob(
   jobId: string,
+  workspaceId: string,
 ): Promise<{ payload: JobProgressPayload; done: boolean } | null> {
   const queues = [ingestionQueue, aiAnalysisQueue, renditionQueue, backgroundQueue];
 
   for (const queue of queues) {
     const job = await queue.getJob(jobId);
     if (!job) continue;
+
+    const data = job.data as { workspaceId?: unknown } | undefined;
+    if (data?.workspaceId !== workspaceId) return null;
 
     const status = mapState(await job.getState());
     if (!status) return null;
@@ -146,14 +155,19 @@ function sseResponse(stream: ReadableStream<Uint8Array>): Response {
  * Fallback-mode streaming (no Redis): emit the current jobStore state, then
  * relay live updates until a terminal state or the deadline. Cleans up the
  * subscription on abort.
+ *
+ * `ownedState` is the caller's jobStore row when it exists AND belongs to the
+ * caller's workspace; a foreign row is passed as null so it behaves exactly
+ * like an unknown job id (non-disclosing).
  */
 function fallbackStream(
   jobId: string,
   signal: AbortSignal,
+  ownedState: BackgroundJobState | null,
 ): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      const initial = jobStore.get(jobId);
+      const initial = ownedState;
       const initialState = initial
         ? stateToPayload(initial)
         : fallback(jobId);
@@ -203,15 +217,18 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
+  const { workspaceId } = auth;
 
   const { id } = await params;
   const jobId = id || "unknown";
 
   // No live broker -> stream in-memory jobStore state (fallback runner).
   if (!isRedisConfigured()) {
-    return sseResponse(fallbackStream(jobId, request.signal));
+    const stored = jobStore.get(jobId);
+    const ownedState = stored && jobStateMatchesWorkspace(stored, workspaceId) ? stored : null;
+    return sseResponse(fallbackStream(jobId, request.signal, ownedState));
   }
 
   const deadline = Date.now() + MAX_STREAM_MS;
@@ -223,7 +240,7 @@ export async function GET(
       while (Date.now() < deadline) {
         let result: { payload: JobProgressPayload; done: boolean } | null = null;
         try {
-          result = await findJob(jobId);
+          result = await findJob(jobId, workspaceId);
         } catch (error) {
           console.error(`[jobs/progress] polling ${jobId} failed`, error);
         }

@@ -18,54 +18,74 @@ import type {
   CuratorFeedbackEntry,
 } from "@/types";
 
-export async function getCollections(): Promise<Collection[]> {
-  const rows = await prisma.collection.findMany({ orderBy: { name: "asc" } });
+/**
+ * P0.2 — Every read below is scoped by `workspaceId`, resolved server-side
+ * from the caller's session (lib/server/workspace-context.ts). The parameter is
+ * mandatory so a missing scope is a type error, never a silent global read.
+ */
+export async function getCollections(workspaceId: string): Promise<Collection[]> {
+  const rows = await prisma.collection.findMany({
+    where: { workspaceId },
+    orderBy: { name: "asc" },
+  });
   return rows.map(toDomainCollection);
 }
 
-export async function getAssets(): Promise<Asset[]> {
+export async function getAssets(workspaceId: string): Promise<Asset[]> {
   const rows = await prisma.asset.findMany({
+    where: { workspaceId },
     include: { versions: true, decisionHistory: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
   return rows.map(toDomainAsset);
 }
 
-export async function getAssetById(id: string): Promise<Asset | null> {
-  const row = await prisma.asset.findUnique({
-    where: { id },
+export async function getAssetById(id: string, workspaceId: string): Promise<Asset | null> {
+  // Non-disclosing: an id from another workspace reads as "does not exist".
+  const row = await prisma.asset.findFirst({
+    where: { id, workspaceId },
     include: { versions: true, decisionHistory: true },
   });
   return row ? toDomainAsset(row) : null;
 }
 
-export async function getActivity(): Promise<ActivityItem[]> {
+export async function getActivity(workspaceId: string): Promise<ActivityItem[]> {
   const rows = await prisma.activityItem.findMany({
+    where: { workspaceId },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
   });
   return rows.map(toDomainActivity);
 }
 
-export async function getComparisons(): Promise<ComparisonRecord[]> {
+export async function getComparisons(workspaceId: string): Promise<ComparisonRecord[]> {
   const rows = await prisma.comparisonRecord.findMany({
+    where: { workspaceId },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
   });
   return rows.map(toDomainComparison);
 }
 
-export async function getFeedbackEntries(): Promise<CuratorFeedbackEntry[]> {
+export async function getFeedbackEntries(
+  workspaceId: string,
+): Promise<CuratorFeedbackEntry[]> {
   const rows = await prisma.curatorFeedbackEntry.findMany({
+    where: { asset: { workspaceId } },
     orderBy: [{ timestamp: "desc" }, { id: "desc" }],
   });
   return rows.map(toDomainFeedback);
 }
 
-export async function getIgnoredDuplicateIds(): Promise<string[]> {
-  const rows = await prisma.ignoredDuplicate.findMany({ orderBy: { createdAt: "asc" } });
+export async function getIgnoredDuplicateIds(workspaceId: string): Promise<string[]> {
+  const rows = await prisma.ignoredDuplicate.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "asc" },
+  });
   return rows.map((row) => row.duplicateId);
 }
 
 export interface HybridSearchOptions {
+  /** Owning workspace; every scored/fetched row must belong to it. */
+  workspaceId: string;
   query: string;
   collectionId?: string;
   limit?: number;
@@ -103,6 +123,7 @@ interface HybridScoreRow {
  * Unindexed rows (missing `searchText`/`embedding`) are naturally skipped.
  */
 export async function hybridSearchAssets({
+  workspaceId,
   query,
   collectionId,
   limit = 12,
@@ -130,6 +151,7 @@ export async function hybridSearchAssets({
       FROM "Asset" a
       WHERE a."embedding" IS NOT NULL
         AND a."searchText" IS NOT NULL
+        AND a."workspaceId" = ${workspaceId}
         AND (${collectionFilter}::text IS NULL OR a."collectionId" = ${collectionFilter})
     ),
     normalized AS (
@@ -156,7 +178,7 @@ export async function hybridSearchAssets({
 
   const ids = rows.map((row) => row.id);
   const fetched = await prisma.asset.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, workspaceId },
     include: { versions: true, decisionHistory: true },
   });
   const byId = new Map(fetched.map((row) => [row.id, row]));
@@ -202,9 +224,13 @@ const REINDEX_BATCH_SIZE = 10;
  * timing in milliseconds.
  */
 export async function reindexAllAssets(
+  workspaceId: string,
   onProgress?: (processed: number, total: number) => void,
 ): Promise<ReindexResult> {
-  const [assets, collections] = await Promise.all([getAssets(), getCollections()]);
+  const [assets, collections] = await Promise.all([
+    getAssets(workspaceId),
+    getCollections(workspaceId),
+  ]);
   const collectionNames = new Map(collections.map((c) => [c.id, c.name]));
 
   const started = performance.now();
@@ -256,7 +282,7 @@ export interface VectorAnalytics {
  * `consistency` breaks passengers into the four `searchText`/`embedding`
  * presence combinations so either-where-desynced rows surface.
  */
-export async function getVectorAnalytics(): Promise<VectorAnalytics> {
+export async function getVectorAnalytics(workspaceId: string): Promise<VectorAnalytics> {
   const [extension, index, dims, counts] = await Promise.all([
     prisma.$queryRaw<Array<{ hasExtension: boolean }>>`
       SELECT EXISTS (
@@ -272,6 +298,7 @@ export async function getVectorAnalytics(): Promise<VectorAnalytics> {
     prisma.$queryRaw<Array<{ dims: number | null }>>`
       SELECT COALESCE(max(vector_dims("embedding")), 0)::int AS "dims"
       FROM "Asset"
+      WHERE "workspaceId" = ${workspaceId}
     `,
     prisma.$queryRaw<Array<{ [k: string]: bigint }>>`
       SELECT
@@ -280,6 +307,7 @@ export async function getVectorAnalytics(): Promise<VectorAnalytics> {
         count(*) FILTER (WHERE "embedding" IS NOT NULL AND "searchText" IS NULL) AS "embeddingOnly",
         count(*) FILTER (WHERE "embedding" IS NULL AND "searchText" IS NOT NULL) AS "searchTextOnly"
       FROM "Asset"
+      WHERE "workspaceId" = ${workspaceId}
     `,
   ]);
 
@@ -340,12 +368,13 @@ const NEIGHBOR_LIMIT_MAX = 50;
  */
 export async function inspectVectorNeighbors(
   assetId: string,
+  workspaceId: string,
   limit = 6,
 ): Promise<InspectVectorResult> {
   const target = await prisma.$queryRaw<Array<{ dims: number | null }>>`
     SELECT vector_dims("embedding")::int AS "dims"
     FROM "Asset"
-    WHERE "id" = ${assetId}
+    WHERE "id" = ${assetId} AND "workspaceId" = ${workspaceId}
     LIMIT 1
   `;
   const dimensions = target[0]?.dims ?? null;
@@ -361,7 +390,7 @@ export async function inspectVectorNeighbors(
     WITH target AS (
       SELECT "embedding"
       FROM "Asset"
-      WHERE "id" = ${assetId}
+      WHERE "id" = ${assetId} AND "workspaceId" = ${workspaceId}
     )
     SELECT
       n."id",
@@ -370,6 +399,7 @@ export async function inspectVectorNeighbors(
       ((t."embedding" <#> n."embedding") * -1) AS "innerProduct"
     FROM "Asset" n, target t
     WHERE n."id" <> ${assetId}
+      AND n."workspaceId" = ${workspaceId}
       AND n."embedding" IS NOT NULL
     ORDER BY "cosine" DESC
     LIMIT ${clamped}
@@ -381,7 +411,7 @@ export async function inspectVectorNeighbors(
 
   const ids = rows.map((row) => row.id);
   const neighbors = await prisma.asset.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, workspaceId },
     select: { id: true, name: true, status: true },
   });
   const byId = new Map(neighbors.map((n) => [n.id, n]));

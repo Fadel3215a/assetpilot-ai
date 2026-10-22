@@ -1,6 +1,6 @@
 import { enqueueBackgroundJob } from "@/lib/queue/jobs";
 import { jobStore } from "@/lib/queue/job-store";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { BackgroundJobData, BackgroundJobType } from "@/types";
 
 export const runtime = "nodejs";
@@ -42,19 +42,26 @@ export async function POST(request: Request): Promise<Response> {
   }
   const jobType = type as BackgroundJobType;
 
-  const auth = await requireRequestRole(request, MIN_ROLES[jobType]);
+  const auth = await requireRequestWorkspace(request, MIN_ROLES[jobType]);
   if (auth instanceof Response) return auth;
 
-  let body: BackgroundJobData = {};
+  let rawBody: Record<string, unknown> = {};
   try {
-    const raw = await request.json();
-    body = (raw ?? {}) as BackgroundJobData;
+    const parsed: unknown = await request.json();
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      rawBody = parsed as Record<string, unknown>;
+    }
   } catch {
-    body = {};
+    rawBody = {};
   }
 
+  // P0.2 — workspace identity is server-owned: any client-supplied workspaceId
+  // is discarded and the caller's resolved workspace is stamped instead.
+  delete rawBody.workspaceId;
+  const data = { ...rawBody, workspaceId: auth.workspaceId } as BackgroundJobData;
+
   try {
-    const jobId = await enqueueBackgroundJob(jobType, body);
+    const jobId = await enqueueBackgroundJob(jobType, data);
     const job = jobStore.get(jobId);
     return new Response(JSON.stringify({ ok: true, jobId, job }), {
       status: 202,

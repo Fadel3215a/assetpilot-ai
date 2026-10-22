@@ -11,13 +11,12 @@ export type ProtectedActionRole = "CURATOR" | "ADMIN";
  * Stage 3.3 — client-side session role for UI permission guarding.
  *
  * The authoritative role is whatever Auth.js stamped into the session
- * (JWT/session callbacks in auth.ts). When signed out, the effective role falls
- * back to the same demo default the server uses (DEMO_USER_ROLE env, default
- * ADMIN) so the sample workspace stays usable without logging in. Real
- * authorization is always enforced server-side (proxy.ts + lib/auth.ts); this
- * only drives UI affordances.
+ * (JWT/session callbacks in auth.ts). When signed out, the effective role is
+ * VIEWER so read-only affordances remain visible while curator/admin controls
+ * stay locked. Real authorization is always enforced server-side (proxy.ts +
+ * lib/auth.ts); this only drives UI affordances.
  */
-const DEMO_ROLE_FALLBACK: UserRole = "ADMIN";
+const SIGNED_OUT_ROLE: UserRole = "VIEWER";
 
 export interface EffectiveRole {
   role: UserRole;
@@ -32,7 +31,7 @@ export interface EffectiveRole {
 export function useEffectiveRole(): EffectiveRole {
   const { data: session, status } = useSession();
   const sessionRole = (session?.user?.role as UserRole | undefined) ?? null;
-  const role: UserRole = sessionRole ?? DEMO_ROLE_FALLBACK;
+  const role: UserRole = sessionRole ?? SIGNED_OUT_ROLE;
   const level = ROLE_LEVEL[role];
 
   return {

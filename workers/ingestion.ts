@@ -62,10 +62,13 @@ function attachRenditionsToCurrentVersion(
 }
 
 async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
-  const { assetId, filePath, mimeType, collectionId } = job.data;
+  const { assetId, filePath, mimeType, collectionId, workspaceId } = job.data;
+  if (!workspaceId) {
+    throw new Error("Ingestion: job payload is missing workspace context");
+  }
 
   report(job, 5, "Loading asset…");
-  const loaded = await loadAssetForWorker(assetId);
+  const loaded = await loadAssetForWorker(assetId, workspaceId);
   if (!loaded) {
     throw new Error(`Ingestion: asset ${assetId} not found`);
   }
@@ -107,7 +110,7 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
 
   // 3. AI analysis.
   report(job, 65, "Running AI analysis…");
-  const collections = await getCollections();
+  const collections = await getCollections(workspaceId);
   updated = await generateAndAttachAnalysis(updated, collections);
   updated = recomputeProductionForWorker(updated);
 
@@ -117,7 +120,7 @@ async function processIngestion(job: Job<IngestionJobData>): Promise<void> {
   updated = curated;
 
   report(job, 95, "Persisting snapshot…");
-  await writeSnapshot(updated);
+  await writeSnapshot(updated, workspaceId);
 
   report(job, 100, "Complete");
   job.log(`Ingestion complete for asset ${assetId} -> snapshot persisted`);

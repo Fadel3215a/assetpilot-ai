@@ -2,6 +2,8 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { parseMediaOwnerRef } from "@/lib/media-ownership";
+import { resolveMediaWorkspaceId, resolveWorkspaceContext } from "@/lib/server/workspace-context";
 
 export const runtime = "nodejs";
 
@@ -36,9 +38,26 @@ export async function GET(_request: Request, context: MediaRouteContext): Promis
   }
 
   const safeSegments = segments.map((segment) => segment.replace(/[^A-Za-z0-9._-]/g, "_"));
+  const relativePath = safeSegments.join("/");
   const target = path.resolve(STORAGE_ROOT, ...safeSegments);
 
   if (!target.startsWith(STORAGE_ROOT + path.sep)) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  // P0.2 — media requires a workspace-qualified session; anonymous callers are
+  // rejected before any file metadata is touched.
+  const workspace = await resolveWorkspaceContext();
+  if (!workspace) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  // Ownership: the file's path must resolve to an asset/version inside the
+  // caller's workspace. Unknown paths, foreign-workspace paths, and paths that
+  // cannot be attributed all answer with the identical 404 below (non-disclosing).
+  const ref = parseMediaOwnerRef(relativePath);
+  const ownerWorkspaceId = ref ? await resolveMediaWorkspaceId(relativePath) : null;
+  if (!ownerWorkspaceId || ownerWorkspaceId !== workspace.workspaceId) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -61,7 +80,8 @@ export async function GET(_request: Request, context: MediaRouteContext): Promis
     headers: {
       "Content-Type": contentType,
       "Content-Length": String(fileInfo.size),
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // Authenticated workspace content: never cacheable by shared caches.
+      "Cache-Control": "private, max-age=31536000, immutable",
     },
   });
 }

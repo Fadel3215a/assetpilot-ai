@@ -2,6 +2,9 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db";
+import { isDemoModeEnabled } from "@/lib/demo-mode";
+import { verifyStoredPassword } from "@/lib/passwords";
+import { isDemoAccountEmail } from "@/lib/server/demo-accounts";
 import type { UserRole } from "@/types";
 
 /**
@@ -33,7 +36,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!email || !password) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.password || user.password !== password) return null;
+        if (!user || !user.password) return null;
+
+        // Seeded demo identities cannot authenticate outside demo mode even if
+        // the rows still exist in the database.
+        if (isDemoAccountEmail(user.email) && !isDemoModeEnabled()) return null;
+
+        if (!(await verifyStoredPassword(password, user.password))) return null;
 
         return { id: user.id, name: user.name, email: user.email, role: user.role };
       },

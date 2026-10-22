@@ -6,6 +6,7 @@ import {
   AssetsProvider,
   type AssetsProviderInitialState,
 } from "@/lib/assets-context";
+import { getDemoAccounts } from "@/lib/server/demo-accounts";
 import {
   getActivity,
   getAssets,
@@ -14,6 +15,7 @@ import {
   getFeedbackEntries,
   getIgnoredDuplicateIds,
 } from "@/lib/server/queries";
+import { resolveWorkspaceContext } from "@/lib/server/workspace-context";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -38,15 +40,25 @@ export const metadata: Metadata = {
   applicationName: "AssetPilot AI",
 };
 
-async function loadInitialState(): Promise<AssetsProviderInitialState> {
+/** Empty shell rendered before sign-in / when the account has no workspace. */
+const EMPTY_INITIAL_STATE: AssetsProviderInitialState = {
+  collections: [],
+  assets: [],
+  activity: [],
+  comparisons: [],
+  feedback: [],
+  ignoredDuplicateIds: [],
+};
+
+async function loadInitialState(workspaceId: string): Promise<AssetsProviderInitialState> {
   const [collections, assets, activity, comparisons, feedback, ignoredDuplicateIds] =
     await Promise.all([
-      getCollections(),
-      getAssets(),
-      getActivity(),
-      getComparisons(),
-      getFeedbackEntries(),
-      getIgnoredDuplicateIds(),
+      getCollections(workspaceId),
+      getAssets(workspaceId),
+      getActivity(workspaceId),
+      getComparisons(workspaceId),
+      getFeedbackEntries(workspaceId),
+      getIgnoredDuplicateIds(workspaceId),
     ]);
 
   return {
@@ -64,7 +76,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const initialState = await loadInitialState();
+  // P0.2 — private inventory is loaded only for a signed-in account with a
+  // workspace membership. Anonymous visitors (and membership-less accounts)
+  // get the empty shell: no private workspace data is ever read for them.
+  // LoginGate shows the sign-in dialog; sign-in triggers router.refresh(),
+  // which re-runs this server render with the fresh session.
+  const workspace = await resolveWorkspaceContext();
+  const initialState = workspace
+    ? await loadInitialState(workspace.workspaceId)
+    : EMPTY_INITIAL_STATE;
 
   return (
     <html
@@ -73,7 +93,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <SessionProvider>
-          <LoginGateProvider>
+          <LoginGateProvider demoAccounts={getDemoAccounts()}>
             <AssetsProvider initialState={initialState}>{children}</AssetsProvider>
           </LoginGateProvider>
         </SessionProvider>

@@ -1,5 +1,5 @@
 import { reindexAllAssets } from "@/lib/server/queries";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 
 export const runtime = "nodejs";
 
@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
  * wall-clock duration in milliseconds.
  */
 export async function POST(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "CURATOR");
+  const auth = await requireRequestWorkspace(request, "CURATOR");
   if (auth instanceof Response) return auth;
 
   try {
-    const result = await reindexAllAssets();
+    const result = await reindexAllAssets(auth.workspaceId);
     return Response.json({
       ok: true,
       count: result.count,

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import { getStorageAdapter } from "@/lib/storage/s3";
 
 export const runtime = "nodejs";
@@ -32,7 +32,7 @@ function badRequest(message: string): Response {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
-  const guard = await requireRequestRole(request, "CURATOR");
+  const guard = await requireRequestWorkspace(request, "CURATOR");
   if (guard instanceof Response) return guard;
 
   let body: unknown;

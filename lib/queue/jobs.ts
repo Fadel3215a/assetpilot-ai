@@ -23,11 +23,16 @@ import type {
  */
 
 /** Creates the normalized QUEUED record. */
-function initialState(type: BackgroundJobType, id: string): BackgroundJobState {
+function initialState(
+  type: BackgroundJobType,
+  id: string,
+  workspaceId: string,
+): BackgroundJobState {
   const now = Date.now();
   return {
     id,
     type,
+    workspaceId,
     status: "QUEUED",
     progressPercent: 0,
     stepLabel: "Queued",
@@ -40,7 +45,10 @@ function initialState(type: BackgroundJobType, id: string): BackgroundJobState {
 function scheduleInProcess(type: BackgroundJobType, id: string, data: BackgroundJobData): void {
   setImmediate(() => {
     const apply = (state: Partial<BackgroundJobState>) => {
-      jobStore.upsert({ ...(jobStore.get(id) ?? initialState(type, id)), ...state });
+      jobStore.upsert({
+        ...(jobStore.get(id) ?? initialState(type, id, data.workspaceId)),
+        ...state,
+      });
     };
 
     try {
@@ -52,7 +60,7 @@ function scheduleInProcess(type: BackgroundJobType, id: string, data: Background
       })
         .then((result) => {
           jobStore.upsert({
-            ...(jobStore.get(id) ?? initialState(type, id)),
+            ...(jobStore.get(id) ?? initialState(type, id, data.workspaceId)),
             status: "COMPLETED",
             progressPercent: 100,
             stepLabel: "Complete",
@@ -62,7 +70,7 @@ function scheduleInProcess(type: BackgroundJobType, id: string, data: Background
         })
         .catch((error: unknown) => {
           jobStore.upsert({
-            ...(jobStore.get(id) ?? initialState(type, id)),
+            ...(jobStore.get(id) ?? initialState(type, id, data.workspaceId)),
             status: "FAILED",
             progressPercent: 0,
             stepLabel: "Failed",
@@ -71,7 +79,7 @@ function scheduleInProcess(type: BackgroundJobType, id: string, data: Background
         });
     } catch (error) {
       jobStore.upsert({
-        ...(jobStore.get(id) ?? initialState(type, id)),
+        ...(jobStore.get(id) ?? initialState(type, id, data.workspaceId)),
         status: "FAILED",
         progressPercent: 0,
         stepLabel: "Failed",
@@ -86,7 +94,7 @@ export async function enqueueBackgroundJob(
   data: BackgroundJobData,
 ): Promise<string> {
   const id = generateJobId();
-  jobStore.upsert(initialState(type, id));
+  jobStore.upsert(initialState(type, id, data.workspaceId));
 
   if (isRedisConfigured()) {
     await backgroundQueue.add(type, data, { jobId: id });

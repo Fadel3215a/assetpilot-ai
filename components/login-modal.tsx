@@ -1,5 +1,4 @@
-"use client";
-
+import type { DemoAccount } from "@/lib/server/demo-accounts";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,22 +8,22 @@ import { Input } from "./ui/input";
 interface LoginModalProps {
   open: boolean;
   onClose: () => void;
+  /** Demo accounts supplied by the server (empty outside demo mode). */
+  demoAccounts?: readonly DemoAccount[];
 }
-
-const quickAccounts = [
-  { label: "Demo", role: "VIEWER", email: "demo@assetpilot.ai", password: "demo1234" },
-  { label: "Curator", role: "CURATOR", email: "curator@assetpilot.ai", password: "curator1234" },
-  { label: "Admin", role: "ADMIN", email: "admin@assetpilot.ai", password: "admin1234" },
-] as const;
 
 /**
  * Stage 3.2 — Credentials sign-in dialog. Submits to the Auth.js credentials
  * provider with redirect:false so failures render inline, then refreshes the
  * server tree so the identity bar and server reads pick up the new session.
  *
+ * Demo quick-login accounts are supplied at render time by the root layout and
+ * are only present when demo mode is enabled; they are never bundled into
+ * client JavaScript.
+ *
  * The dialog unmounts when closed, so email/password/error reset on reopen.
  */
-export function LoginModal({ open, onClose }: LoginModalProps) {
+export function LoginModal({ open, onClose, demoAccounts = [] }: LoginModalProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -127,23 +126,25 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
           </Button>
         </form>
 
-        <div className="mt-5">
-          <p className="text-[11px] uppercase tracking-wider text-muted">One-click demo accounts</p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {quickAccounts.map(({ label, role, email: accEmail, password: accPassword }) => (
-              <button
-                key={accEmail}
-                type="button"
-                disabled={pending}
-                onClick={() => void submit(accEmail, accPassword)}
-                className="rounded-md border border-border bg-background px-2 py-2 text-center transition-[border-color,background-color] duration-[var(--duration-fast)] hover:border-accent/30 hover:bg-surface-elevated disabled:pointer-events-none disabled:opacity-50"
-              >
-                <span className="block text-sm font-medium text-foreground">{label}</span>
-                <span className="block text-[10px] uppercase tracking-wider text-muted">{role}</span>
-              </button>
-            ))}
+        {demoAccounts.length > 0 && (
+          <div className="mt-5">
+            <p className="text-[11px] uppercase tracking-wider text-muted">One-click demo accounts</p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {demoAccounts.map(({ label, role, email: accEmail, password: accPassword }) => (
+                <button
+                  key={accEmail}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void submit(accEmail, accPassword)}
+                  className="rounded-md border border-border bg-background px-2 py-2 text-center transition-[border-color,background-color] duration-[var(--duration-fast)] hover:border-accent/30 hover:bg-surface-elevated disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <span className="block text-sm font-medium text-foreground">{label}</span>
+                  <span className="block text-[10px] uppercase tracking-wider text-muted">{role}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

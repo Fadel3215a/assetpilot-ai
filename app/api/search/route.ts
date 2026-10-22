@@ -1,5 +1,5 @@
 import { hybridSearchAssets } from "@/lib/server/queries";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { Asset, AssetSearchHit } from "@/types";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ interface SearchRequestBody {
  * cosine similarity + PostgreSQL full-text rank. Guarded to VIEWER minimum.
  */
 export async function POST(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   let body: SearchRequestBody;
@@ -64,6 +64,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const { assets, hits } = await hybridSearchAssets({
+      workspaceId: auth.workspaceId,
       query,
       collectionId,
       limit,

@@ -33,9 +33,10 @@ function actId(): string {
 /** Loads an asset's full domain model plus its parsed AI session state. */
 export async function loadAssetForWorker(
   id: string,
+  workspaceId: string,
 ): Promise<{ domain: Asset; aiSessionState: AssetAISessionState } | null> {
-  const row = await prisma.asset.findUnique({
-    where: { id },
+  const row = await prisma.asset.findFirst({
+    where: { id, workspaceId },
     include: { versions: true, decisionHistory: true },
   });
   if (!row) return null;
@@ -50,12 +51,21 @@ export async function loadAssetForWorker(
  * exactly as the server actions' persistSnapshot does. Runs inside a single
  * interactive transaction.
  */
-export async function writeSnapshot(domain: Asset): Promise<void> {
-  await withTransaction(async (tx: TxClient) => await writeSnapshotTx(tx, domain));
+export async function writeSnapshot(domain: Asset, workspaceId: string): Promise<void> {
+  await withTransaction(
+    async (tx: TxClient) => await writeSnapshotTx(tx, domain, workspaceId),
+  );
 }
 
-export async function writeSnapshotTx(tx: TxClient, domain: Asset): Promise<void> {
-  await tx.asset.update({ where: { id: domain.id }, data: assetColumns(domain) });
+export async function writeSnapshotTx(
+  tx: TxClient,
+  domain: Asset,
+  workspaceId: string,
+): Promise<void> {
+  await tx.asset.updateMany({
+    where: { id: domain.id, workspaceId },
+    data: assetColumns(domain),
+  });
   await tx.assetVersion.deleteMany({ where: { assetId: domain.id } });
   if (domain.versions.length > 0) {
     await tx.assetVersion.createMany({
@@ -73,16 +83,19 @@ export async function writeSnapshotTx(tx: TxClient, domain: Asset): Promise<void
   }
 }
 
-/** Writes an activity audit entry (model: ActivityItem). */
-export async function addActivityRecord(item: {
-  assetId: string;
-  assetName: string;
-  action: string;
-  timestamp: string;
-  source: "ai" | "curator";
-}): Promise<void> {
+/** Writes an activity audit entry (model: ActivityItem) into `workspaceId`. */
+export async function addActivityRecord(
+  item: {
+    assetId: string;
+    assetName: string;
+    action: string;
+    timestamp: string;
+    source: "ai" | "curator";
+  },
+  workspaceId: string,
+): Promise<void> {
   await prisma.activityItem.create({
-    data: activityToRow({ ...item, id: actId() }),
+    data: { ...activityToRow({ ...item, id: actId() }), workspaceId },
   });
 }
 

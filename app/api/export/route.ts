@@ -1,6 +1,6 @@
 import { getAssetById, getAssets, getCollections } from "@/lib/server/queries";
 import { buildExportZip } from "@/lib/export";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { Asset } from "@/types";
 
 export const runtime = "nodejs";
@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
  * metadata JSON sidecar.
  */
 export async function GET(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
+  const { workspaceId } = auth;
 
   const url = new URL(request.url);
   const rawIds = (url.searchParams.get("assetIds") ?? "")
@@ -32,9 +33,9 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     if (collectionId) {
-      const all = await getAssets();
+      const all = await getAssets(workspaceId);
       assets = all.filter((a) => a.collectionId === collectionId);
-      const collections = await getCollections();
+      const collections = await getCollections(workspaceId);
       label = collections.find((c) => c.id === collectionId)?.name ?? "collection";
       if (assets.length === 0) {
         return Response.json({ ok: false, error: "No assets found for this collection." }, { status: 404 });
@@ -42,7 +43,7 @@ export async function GET(request: Request): Promise<Response> {
     } else if (rawIds.length > 0) {
       const loaded: Asset[] = [];
       for (const id of rawIds) {
-        const asset = await getAssetById(id);
+        const asset = await getAssetById(id, workspaceId);
         if (asset) loaded.push(asset);
       }
       assets = loaded;
@@ -58,7 +59,7 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ ok: false, error: "Export failed." }, { status: 500 });
   }
 
-  const collections = await getCollections();
+  const collections = await getCollections(workspaceId);
 
   try {
     const { buffer, fileName } = await buildExportZip(assets, collections, label);

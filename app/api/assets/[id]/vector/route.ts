@@ -1,5 +1,5 @@
 import { inspectVectorNeighbors, type InspectVectorResult } from "@/lib/server/queries";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 
 export const runtime = "nodejs";
 
@@ -18,7 +18,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   const { id } = await params;
@@ -30,7 +30,7 @@ export async function GET(
   const limit = Number.isFinite(parsedLimit) ? parsedLimit : 6;
 
   try {
-    const result = await inspectVectorNeighbors(id, limit);
+    const result = await inspectVectorNeighbors(id, auth.workspaceId, limit);
     return Response.json(result);
   } catch (error) {
     console.error(`assets/${id}/vector: inspection failed`, error);

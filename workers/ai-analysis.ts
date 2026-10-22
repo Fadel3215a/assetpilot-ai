@@ -39,10 +39,13 @@ function report(job: Job<AIAnalysisJobData>, progressPercent: number, stepLabel:
 }
 
 async function processAiAnalysis(job: Job<AIAnalysisJobData>): Promise<void> {
-  const { assetId, versionId, targets } = job.data;
+  const { assetId, versionId, targets, workspaceId } = job.data;
+  if (!workspaceId) {
+    throw new Error("AI-analysis: job payload is missing workspace context");
+  }
 
   report(job, 10, "Loading asset…");
-  const loaded = await loadAssetForWorker(assetId);
+  const loaded = await loadAssetForWorker(assetId, workspaceId);
   if (!loaded) {
     throw new Error(`AI-analysis: asset ${assetId} not found`);
   }
@@ -51,7 +54,7 @@ async function processAiAnalysis(job: Job<AIAnalysisJobData>): Promise<void> {
   job.log(`Analysis targets: ${targets.length ? targets.join(", ") : "all"}`);
 
   report(job, 30, "Loading collections…");
-  const collections = await getCollections();
+  const collections = await getCollections(workspaceId);
 
   report(job, 55, "Generating AI analysis…");
   let updated = await generateAndAttachAnalysis(domain, collections);
@@ -62,19 +65,22 @@ async function processAiAnalysis(job: Job<AIAnalysisJobData>): Promise<void> {
   updated = promotedDomain;
 
   report(job, 95, "Persisting snapshot…");
-  await writeSnapshot(updated);
+  await writeSnapshot(updated, workspaceId);
 
   report(job, 100, "Complete");
   job.log(`Persisted AI analysis for asset ${assetId} (version ${versionId})`);
 
   if (promoted) {
-    await addActivityRecord({
-      assetId,
-      assetName: updated.name,
-      action: PROMOTION_ACTION,
-      timestamp: nowIso(),
-      source: "ai",
-    });
+    await addActivityRecord(
+      {
+        assetId,
+        assetName: updated.name,
+        action: PROMOTION_ACTION,
+        timestamp: nowIso(),
+        source: "ai",
+      },
+      workspaceId,
+    );
     job.log(`Promoted ${assetId} to PRODUCTION_READY via curation rules`);
   }
 }

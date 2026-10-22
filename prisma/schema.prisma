@@ -89,8 +89,51 @@ model User {
   password      String?
   role          UserRole  @default(VIEWER)
 
-  accounts Account[]
-  sessions Session[]
+  accounts     Account[]
+  sessions     Session[]
+  memberships  WorkspaceMember[]
+}
+
+/**
+ * Stage P0.2 — Workspace ownership boundary.
+ *
+ * Every owned row (Asset, Collection, ActivityItem, ComparisonRecord,
+ * IgnoredDuplicate) carries a non-null workspaceId; nested rows (versions,
+ * decision history, feedback) inherit it through their Asset FK. Access is
+ * membership-based: a signed-in user only sees workspaces where a
+ * WorkspaceMember row exists (and, for seeded demo identities, only while
+ * demo mode is enabled). Capability checks keep using the global User.role —
+ * membership answers "may this user see this workspace", role answers "may
+ * they curate/administer".
+ */
+model Workspace {
+  id       String   @id @default(cuid())
+  slug     String   @unique
+  name     String
+  isLegacy Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  members           WorkspaceMember[]
+  assets            Asset[]
+  collections       Collection[]
+  activity          ActivityItem[]
+  comparisons       ComparisonRecord[]
+  ignoredDuplicates IgnoredDuplicate[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 model Account {
@@ -137,15 +180,22 @@ model Collection {
   description String
   color       String
 
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   assets Asset[]
 
   @@index([name])
+  @@index([workspaceId])
 }
 
 model Asset {
   id   String    @id
   name String
   type AssetType
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   status       AssetStatus   @default(DRAFT)
   collectionId String
@@ -191,6 +241,7 @@ model Asset {
   @@index([collectionId])
   @@index([status])
   @@index([searchText])
+  @@index([workspaceId])
 }
 
 model AssetVersion {
@@ -241,6 +292,9 @@ model DecisionHistoryEntry {
 model ActivityItem {
   id String @id
 
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   assetId   String
   assetName String
   action    String
@@ -251,10 +305,14 @@ model ActivityItem {
 
   @@index([timestamp])
   @@index([assetId])
+  @@index([workspaceId])
 }
 
 model ComparisonRecord {
   id String @id
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   reviewer String
 
@@ -272,6 +330,7 @@ model ComparisonRecord {
   timestamp DateTime
 
   @@index([timestamp])
+  @@index([workspaceId])
 }
 
 model CuratorFeedbackEntry {
@@ -291,7 +350,12 @@ model CuratorFeedbackEntry {
 }
 
 model IgnoredDuplicate {
-  duplicateId String @id
+  duplicateId String
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  @@id([workspaceId, duplicateId])
 }

@@ -1,7 +1,8 @@
 import { backgroundQueue } from "@/lib/queue/queues";
 import { jobStore } from "@/lib/queue/job-store";
 import { isRedisConfigured } from "@/lib/queue/client";
-import { requireRequestRole } from "@/lib/auth";
+import { jobStateMatchesWorkspace } from "@/lib/server/workspace-policy";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 import type { BackgroundJobState, JobStatus } from "@/types";
 
 export const runtime = "nodejs";
@@ -84,14 +85,16 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   const { id } = await params;
   const jobId = id;
 
   const base = jobStore.get(jobId);
-  if (!base) {
+  // P0.2 — non-disclosing: a job owned by another workspace answers exactly
+  // like an id that does not exist.
+  if (!base || !jobStateMatchesWorkspace(base, auth.workspaceId)) {
     return new Response(JSON.stringify({ ok: false, error: `Job ${jobId} not found.` }), {
       status: 404,
       headers: { "content-type": "application/json" },

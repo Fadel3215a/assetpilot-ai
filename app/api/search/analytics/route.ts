@@ -1,5 +1,5 @@
 import { getVectorAnalytics, type VectorAnalytics } from "@/lib/server/queries";
-import { requireRequestRole } from "@/lib/auth";
+import { requireRequestWorkspace } from "@/lib/server/workspace-context";
 
 export const runtime = "nodejs";
 
@@ -15,11 +15,11 @@ export const dynamic = "force-dynamic";
  * and the `searchText`/`embedding` consistency breakdown.
  */
 export async function GET(request: Request): Promise<Response> {
-  const auth = await requireRequestRole(request, "VIEWER");
+  const auth = await requireRequestWorkspace(request, "VIEWER");
   if (auth instanceof Response) return auth;
 
   try {
-    const analytics = await getVectorAnalytics();
+    const analytics = await getVectorAnalytics(auth.workspaceId);
     return Response.json({ ok: true, ...analytics });
   } catch (error) {
     console.error("analytics: vector inspection failed", error);

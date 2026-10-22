@@ -20,7 +20,9 @@ import { statusFromDecision } from "@/lib/utils";
 import { indexAsset } from "@/lib/search";
 import { evaluateCurationRules, type CurationEvaluation } from "@/lib/curation-rules";
 import { buildExportZip } from "@/lib/export";
-import { assertServerRole, AuthError } from "@/lib/auth";
+import { AuthError } from "@/lib/auth";
+import { requireWorkspaceAction } from "@/lib/server/workspace-context";
+import { isDemoModeEnabled } from "@/lib/demo-mode";
 import { isRedisConfigured } from "@/lib/queue/client";
 import { ingestionQueue, QUEUE_NAMES } from "@/lib/queue/queues";
 import { getStorageAdapter, isS3Configured } from "@/lib/storage/s3";
@@ -81,17 +83,23 @@ function actId(): string {
   return `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-async function loadCollections(): Promise<Collection[]> {
-  const rows = await prisma.collection.findMany({ orderBy: { name: "asc" } });
+async function loadCollections(workspaceId: string): Promise<Collection[]> {
+  const rows = await prisma.collection.findMany({
+    where: { workspaceId },
+    orderBy: { name: "asc" },
+  });
   return rows.map(toDomainCollection);
 }
 
 async function loadAsset(
   tx: TxClient,
   id: string,
+  workspaceId: string,
 ): Promise<{ domain: Asset; aiSessionState: AssetAISessionState } | null> {
-  const row = await tx.asset.findUnique({
-    where: { id },
+  // Scoped load: an id from another workspace resolves to null, which every
+  // caller already reports as the generic "Asset not found." (non-disclosing).
+  const row = await tx.asset.findFirst({
+    where: { id, workspaceId },
     include: { versions: true, decisionHistory: true },
   });
   if (!row) return null;
@@ -101,10 +109,15 @@ async function loadAsset(
   };
 }
 
-async function insertAssetWithChildren(tx: TxClient, domain: Asset): Promise<void> {
+async function insertAssetWithChildren(
+  tx: TxClient,
+  domain: Asset,
+  workspaceId: string,
+): Promise<void> {
   await tx.asset.create({
     data: {
       ...assetColumns(domain),
+      workspaceId,
       aiSessionState: toJsonInput(DEFAULT_SESSION_STATE),
       versions: { create: domain.versions.map((v) => versionToRow(v)) },
       decisionHistory: { create: domain.decisionHistory.map(historyToRow) },
@@ -112,8 +125,11 @@ async function insertAssetWithChildren(tx: TxClient, domain: Asset): Promise<voi
   });
 }
 
-async function persistSnapshot(tx: TxClient, a: Asset): Promise<void> {
-  await tx.asset.update({ where: { id: a.id }, data: assetColumns(a) });
+async function persistSnapshot(tx: TxClient, a: Asset, workspaceId: string): Promise<void> {
+  await tx.asset.updateMany({
+    where: { id: a.id, workspaceId },
+    data: assetColumns(a),
+  });
   await tx.assetVersion.deleteMany({ where: { assetId: a.id } });
   if (a.versions.length > 0) {
     await tx.assetVersion.createMany({ data: a.versions.map((v) => ({ ...versionToRow(v), assetId: a.id })) });
@@ -130,9 +146,10 @@ async function updateSessionState(
   tx: TxClient,
   assetId: string,
   session: AssetAISessionState,
+  workspaceId: string,
 ): Promise<void> {
-  await tx.asset.update({
-    where: { id: assetId },
+  await tx.asset.updateMany({
+    where: { id: assetId, workspaceId },
     data: { aiSessionState: toJsonInput(session) },
   });
 }
@@ -140,10 +157,12 @@ async function updateSessionState(
 async function addActivity(
   tx: TxClient,
   item: { assetId: string; assetName: string; action: string; timestamp: string; source: "ai" | "curator" },
+  workspaceId: string,
 ): Promise<void> {
   await tx.activityItem.create({
     data: {
       ...activityToRow({ ...item, id: actId() }),
+      workspaceId,
     },
   });
 }
@@ -151,7 +170,16 @@ async function addActivity(
 async function addFeedback(
   tx: TxClient,
   entry: Omit<CuratorFeedbackEntry, "id" | "timestamp">,
+  workspaceId: string,
 ): Promise<CuratorFeedbackEntry> {
+  // Feedback inherits its workspace through the asset (no direct column), so
+  // ownership is verified explicitly before the row is written.
+  const owned = await tx.asset.findFirst({
+    where: { id: entry.assetId, workspaceId },
+    select: { id: true },
+  });
+  if (!owned) throw new Error("ASSET_NOT_FOUND");
+
   const full: CuratorFeedbackEntry = {
     ...entry,
     id: `fb-${Date.now()}`,
@@ -346,9 +374,9 @@ export async function submitReviewAction(
   }
 
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const asset = await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
 
       const domain = loaded.domain;
@@ -416,14 +444,14 @@ export async function submitReviewAction(
         }
       }
 
-      await persistSnapshot(tx, domain);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
       await addActivity(tx, {
         assetId,
         assetName: domain.name,
         action: reviewActionLabel(action),
         timestamp,
         source: "curator",
-      });
+      }, ctx.workspaceId);
       if (curationPromoted) {
         await addActivity(tx, {
           assetId,
@@ -431,7 +459,7 @@ export async function submitReviewAction(
           action: "Auto-promoted to production ready (curation rules)",
           timestamp,
           source: "curator",
-        });
+        }, ctx.workspaceId);
       }
 
       return domain;
@@ -459,22 +487,25 @@ export async function submitComparisonAction(payload: {
   }
 
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const result = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const affected: Asset[] = [];
 
       const applyStatus = async (assetId: string, status: "APPROVED" | "REJECTED") => {
-        const row = await tx.asset.findUnique({ where: { id: assetId } });
+        const row = await tx.asset.findFirst({
+          where: { id: assetId, workspaceId: ctx.workspaceId },
+          select: { id: true },
+        });
         if (!row) return;
-        await tx.asset.update({
-          where: { id: assetId },
+        await tx.asset.updateMany({
+          where: { id: assetId, workspaceId: ctx.workspaceId },
           data: { status, updatedAt: new Date(timestamp) },
         });
       };
 
       const reloadDomain = async (assetId: string): Promise<Asset | null> => {
-        const loaded = await loadAsset(tx, assetId);
+        const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
         return loaded?.domain ?? null;
       };
 
@@ -505,7 +536,9 @@ export async function submitComparisonAction(payload: {
         decision: payload.decision,
         reason: payload.reason,
       };
-      await tx.comparisonRecord.create({ data: comparisonToRow(record) });
+      await tx.comparisonRecord.create({
+        data: { ...comparisonToRow(record), workspaceId: ctx.workspaceId },
+      });
 
       await addActivity(tx, {
         assetId: payload.itemA.assetId,
@@ -513,7 +546,7 @@ export async function submitComparisonAction(payload: {
         action: `Curator comparison: ${payload.decision.replace(/_/g, " ").toLowerCase()}`,
         timestamp,
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { record, assets: affected };
     });
@@ -536,9 +569,9 @@ export async function updateCuratorChecklistAction(
   }
 
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const asset = await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
       const domain = loaded.domain;
 
@@ -566,7 +599,7 @@ export async function updateCuratorChecklistAction(
         })),
         readyAt: prod.ready ? domain.productionReadiness.readyAt : undefined,
       };
-      await persistSnapshot(tx, domain);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
       return domain;
     });
 
@@ -586,9 +619,9 @@ export async function acceptTagSuggestionAction(
   tagId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset; feedback?: CuratorFeedbackEntry }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
@@ -608,8 +641,8 @@ export async function acceptTagSuggestionAction(
         dismissedTagIds: uniqueConcat(aiSessionState.dismissedTagIds, [tagId]),
       };
 
-      await persistSnapshot(tx, domain);
-      await updateSessionState(tx, assetId, session);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
@@ -617,7 +650,7 @@ export async function acceptTagSuggestionAction(
         suggestion: suggestion.tag,
         curatorAction: "accepted",
         finalValue: suggestion.tag,
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -625,7 +658,7 @@ export async function acceptTagSuggestionAction(
         action: `Curator accepted tag: "${suggestion.tag}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, asset: domain, feedback };
     });
@@ -645,9 +678,9 @@ export async function editTagSuggestionAction(
   if (!trimmed) return { ok: false, error: "Tag cannot be empty." };
 
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
@@ -667,8 +700,8 @@ export async function editTagSuggestionAction(
         dismissedTagIds: uniqueConcat(aiSessionState.dismissedTagIds, [tagId]),
       };
 
-      await persistSnapshot(tx, domain);
-      await updateSessionState(tx, assetId, session);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
@@ -676,7 +709,7 @@ export async function editTagSuggestionAction(
         suggestion: suggestion.tag,
         curatorAction: "edited",
         finalValue: trimmed,
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -684,7 +717,7 @@ export async function editTagSuggestionAction(
         action: `Curator edited tag: "${suggestion.tag}" â†’ "${trimmed}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, asset: domain, feedback };
     });
@@ -700,9 +733,9 @@ export async function dismissTagSuggestionAction(
   tagId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
@@ -716,15 +749,15 @@ export async function dismissTagSuggestionAction(
       };
 
       domain = recomputeProduction(domain);
-      await persistSnapshot(tx, domain);
-      await updateSessionState(tx, assetId, session);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
         suggestionType: "tag",
         suggestion: suggestion.tag,
         curatorAction: "dismissed",
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -732,7 +765,7 @@ export async function dismissTagSuggestionAction(
         action: `Curator dismissed tag: "${suggestion.tag}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, feedback };
     });
@@ -748,25 +781,27 @@ export async function acceptCollectionSuggestionAction(
   collectionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset; feedback?: CuratorFeedbackEntry }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
 
-      const collectionRow = await tx.collection.findUnique({ where: { id: collectionId } });
+      const collectionRow = await tx.collection.findFirst({
+        where: { id: collectionId, workspaceId: ctx.workspaceId },
+      });
       if (!collectionRow) return { ok: false, error: "Collection not found." };
 
       domain.collectionId = collectionId;
       domain = recomputeProduction(domain);
-      await persistSnapshot(tx, domain);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
 
       const session: AssetAISessionState = {
         ...aiSessionState,
         collectionOverrides: uniqueConcat(aiSessionState.collectionOverrides, [collectionId]),
       };
-      await updateSessionState(tx, assetId, session);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
@@ -774,7 +809,7 @@ export async function acceptCollectionSuggestionAction(
         suggestion: domain.aiAnalysis.suggestedCollectionId,
         curatorAction: "accepted",
         finalValue: collectionId,
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -782,7 +817,7 @@ export async function acceptCollectionSuggestionAction(
         action: `Curator accepted collection: "${collectionRow.name}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, asset: domain, feedback };
     });
@@ -798,9 +833,9 @@ export async function acceptObservationAction(
   observationId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
@@ -818,8 +853,8 @@ export async function acceptObservationAction(
       };
 
       domain = recomputeProduction(domain);
-      await persistSnapshot(tx, domain);
-      await updateSessionState(tx, assetId, session);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
@@ -827,7 +862,7 @@ export async function acceptObservationAction(
         suggestion: obs.text,
         curatorAction: "accepted",
         finalValue: obs.text,
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -835,7 +870,7 @@ export async function acceptObservationAction(
         action: `Curator accepted observation: "${obs.text}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, feedback };
     });
@@ -851,9 +886,9 @@ export async function dismissObservationAction(
   observationId: string,
 ): Promise<{ ok: boolean; error?: string; feedback?: CuratorFeedbackEntry }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     return await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) return { ok: false, error: "Asset not found." };
       const { domain: initialDomain, aiSessionState } = loaded;
       let domain = initialDomain;
@@ -870,15 +905,15 @@ export async function dismissObservationAction(
       };
 
       domain = recomputeProduction(domain);
-      await persistSnapshot(tx, domain);
-      await updateSessionState(tx, assetId, session);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
 
       const feedback = await addFeedback(tx, {
         assetId,
         suggestionType: "observation",
         suggestion: obs.text,
         curatorAction: "dismissed",
-      });
+      }, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -886,7 +921,7 @@ export async function dismissObservationAction(
         action: `Curator dismissed observation: "${obs.text}"`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return { ok: true, feedback };
     });
@@ -901,15 +936,15 @@ export async function markAIAssistedReviewAction(
   assetId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
       const session: AssetAISessionState = {
         ...loaded.aiSessionState,
         aiAssistedReview: true,
       };
-      await updateSessionState(tx, assetId, session);
+      await updateSessionState(tx, assetId, session, ctx.workspaceId);
     });
     return { ok: true };
   } catch (error) {
@@ -928,7 +963,7 @@ export async function uploadAssetAction(formData: FormData): Promise<{
   asset?: Asset;
 }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const file = formData.get("file");
     if (!(file instanceof File)) {
       return { ok: false, error: "Could not process uploaded file." };
@@ -943,7 +978,7 @@ export async function uploadAssetAction(formData: FormData): Promise<{
     }
     const extracted = parseExtractedMetadata(JSON.parse(extractedRaw));
 
-    const collections = await loadCollections();
+    const collections = await loadCollections(ctx.workspaceId);
     if (!collections.some((c) => c.id === collectionId)) {
       return { ok: false, error: "Collection not found." };
     }
@@ -968,7 +1003,7 @@ export async function uploadAssetAction(formData: FormData): Promise<{
     await persistUploadBytes(storedName, fileBytes);
 
     domain = await withTransaction(async (tx) => {
-      await insertAssetWithChildren(tx, domain);
+      await insertAssetWithChildren(tx, domain, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId: domain.id,
@@ -976,14 +1011,14 @@ export async function uploadAssetAction(formData: FormData): Promise<{
         action: "Asset uploaded",
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
       await addActivity(tx, {
         assetId: domain.id,
         assetName: domain.name,
         action: "AI analysis generated for uploaded asset",
         timestamp: nowIso(),
         source: "ai",
-      });
+      }, ctx.workspaceId);
       return domain;
     });
 
@@ -1023,7 +1058,7 @@ export async function registerDirectUploadAction(formData: FormData): Promise<{
   asset?: Asset;
 }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
 
     const file = formData.get("file");
     const assetId = (formData.get("assetId") as string | null)?.trim();
@@ -1064,7 +1099,7 @@ export async function registerDirectUploadAction(formData: FormData): Promise<{
       await getStorageAdapter().putObject(key, fileBytes, contentType);
     }
 
-    const collections = await loadCollections();
+    const collections = await loadCollections(ctx.workspaceId);
     if (!collections.some((c) => c.id === collectionId)) {
       return { ok: false, error: "Collection not found." };
     }
@@ -1077,21 +1112,21 @@ export async function registerDirectUploadAction(formData: FormData): Promise<{
     });
 
     await withTransaction(async (tx) => {
-      await insertAssetWithChildren(tx, domain);
+      await insertAssetWithChildren(tx, domain, ctx.workspaceId);
       await addActivity(tx, {
         assetId: domain.id,
         assetName: domain.name,
         action: "Asset uploaded",
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
       await addActivity(tx, {
         assetId: domain.id,
         assetName: domain.name,
         action: "AI analysis queued for uploaded asset",
         timestamp: nowIso(),
         source: "ai",
-      });
+      }, ctx.workspaceId);
     });
 
     // Keep the hybrid search index in sync with the new asset.
@@ -1108,7 +1143,7 @@ export async function registerDirectUploadAction(formData: FormData): Promise<{
       // (tracked by asset id from the client) can locate the job directly.
       await ingestionQueue.add(
         QUEUE_NAMES.ingestion,
-        { assetId, filePath, mimeType: contentType, collectionId },
+        { assetId, filePath, mimeType: contentType, collectionId, workspaceId: ctx.workspaceId },
         { jobId: assetId, removeOnComplete: 100, removeOnFail: 500 },
       );
     }
@@ -1126,13 +1161,13 @@ export async function updateAssetMetadataAction(
   payload: { name: string; description: string; tags: string[]; collectionId: string; usageNotes: string },
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const asset = await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
       let domain = loaded.domain;
 
-      const collections = await loadCollectionsTx(tx);
+      const collections = await loadCollectionsTx(tx, ctx.workspaceId);
       if (!collections.some((c) => c.id === payload.collectionId)) {
         throw new Error("COLLECTION_NOT_FOUND");
       }
@@ -1171,7 +1206,7 @@ export async function updateAssetMetadataAction(
         curationPromoted = result.promoted;
       }
 
-      await persistSnapshot(tx, domain);
+      await persistSnapshot(tx, domain, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -1179,7 +1214,7 @@ export async function updateAssetMetadataAction(
         action: "Metadata updated",
         timestamp,
         source: "curator",
-      });
+      }, ctx.workspaceId);
       if (curationPromoted) {
         await addActivity(tx, {
           assetId,
@@ -1187,7 +1222,7 @@ export async function updateAssetMetadataAction(
           action: "Auto-promoted to production ready (curation rules)",
           timestamp,
           source: "curator",
-        });
+        }, ctx.workspaceId);
       }
 
       return domain;
@@ -1207,8 +1242,11 @@ export async function updateAssetMetadataAction(
   }
 }
 
-async function loadCollectionsTx(tx: TxClient): Promise<Collection[]> {
-  const rows = await tx.collection.findMany({ orderBy: { name: "asc" } });
+async function loadCollectionsTx(tx: TxClient, workspaceId: string): Promise<Collection[]> {
+  const rows = await tx.collection.findMany({
+    where: { workspaceId },
+    orderBy: { name: "asc" },
+  });
   return rows.map(toDomainCollection);
 }
 
@@ -1218,7 +1256,7 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
   asset?: Asset;
 }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const assetId = formData.get("assetId");
     const label = formData.get("label");
     if (typeof assetId !== "string" || typeof label !== "string" || !label.trim()) {
@@ -1241,9 +1279,9 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
     let resultAsset: Asset | undefined;
     let versionCollections: Collection[] = [];
     await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
-      const collections = await loadCollectionsTx(tx);
+      const collections = await loadCollectionsTx(tx, ctx.workspaceId);
       versionCollections = collections;
 
       let objectUrl: string | null = null;
@@ -1266,14 +1304,14 @@ export async function createAssetVersionAction(formData: FormData): Promise<{
       }
       updated = await enrich(updated, collections);
 
-      await persistSnapshot(tx, updated);
+      await persistSnapshot(tx, updated, ctx.workspaceId);
       await addActivity(tx, {
         assetId,
         assetName: updated.name,
         action: `Version created: ${label}`,
         timestamp: nowIso(),
         source: "curator",
-      });
+      }, ctx.workspaceId);
       resultAsset = updated;
     });
 
@@ -1302,9 +1340,9 @@ export async function promoteVersionAction(
   versionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const asset = await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
 
       const domain = loaded.domain;
@@ -1318,7 +1356,7 @@ export async function promoteVersionAction(
       domain.updatedAt = timestamp;
 
       const updated = recomputeProduction(domain);
-      await persistSnapshot(tx, updated);
+      await persistSnapshot(tx, updated, ctx.workspaceId);
 
       await addActivity(tx, {
         assetId,
@@ -1326,7 +1364,7 @@ export async function promoteVersionAction(
         action: `Version promoted: v${version.versionNumber} — ${version.label}`,
         timestamp,
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return updated;
     });
@@ -1348,9 +1386,9 @@ export async function deleteVersionAction(
   versionId: string,
 ): Promise<{ ok: boolean; error?: string; asset?: Asset }> {
   try {
-    await assertServerRole("ADMIN");
+    const ctx = await requireWorkspaceAction("ADMIN");
     const asset = await withTransaction(async (tx) => {
-      const loaded = await loadAsset(tx, assetId);
+      const loaded = await loadAsset(tx, assetId, ctx.workspaceId);
       if (!loaded) throw new Error("ASSET_NOT_FOUND");
 
       const domain = loaded.domain;
@@ -1363,7 +1401,7 @@ export async function deleteVersionAction(
       domain.updatedAt = timestamp;
 
       const updated = recomputeProduction(domain);
-      await persistSnapshot(tx, updated);
+      await persistSnapshot(tx, updated, ctx.workspaceId);
       await removeVersionMedia(version);
 
       await addActivity(tx, {
@@ -1372,7 +1410,7 @@ export async function deleteVersionAction(
         action: `Version deleted: v${version.versionNumber} — ${version.label}`,
         timestamp,
         source: "curator",
-      });
+      }, ctx.workspaceId);
 
       return updated;
     });
@@ -1394,10 +1432,10 @@ export async function deleteVersionAction(
 
 export async function ignoreDuplicateAction(duplicateId: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     await prisma.ignoredDuplicate.upsert({
-      where: { duplicateId },
-      create: { duplicateId },
+      where: { workspaceId_duplicateId: { workspaceId: ctx.workspaceId, duplicateId } },
+      create: { workspaceId: ctx.workspaceId, duplicateId },
       update: {},
     });
     return { ok: true };
@@ -1416,13 +1454,13 @@ export async function bulkAddTagAction(
   if (!trimmed) return { ok: false, error: "Tag cannot be empty." };
 
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const touched: Asset[] = [];
 
       for (const id of assetIds) {
-        const loaded = await loadAsset(tx, id);
+        const loaded = await loadAsset(tx, id, ctx.workspaceId);
         if (!loaded) continue;
         let domain = loaded.domain;
         if (!domain.tags.includes(trimmed)) {
@@ -1432,11 +1470,11 @@ export async function bulkAddTagAction(
             updatedAt: timestamp,
           };
           domain = recomputeProduction(domain);
-          await persistSnapshot(tx, domain);
+          await persistSnapshot(tx, domain, ctx.workspaceId);
         }
         // Re-evaluate readiness is above; sync the asset's session state so
         // accepted/dismissed tracking remains intact after the bulk change.
-        await updateSessionState(tx, id, loaded.aiSessionState);
+        await updateSessionState(tx, id, loaded.aiSessionState, ctx.workspaceId);
         touched.push(domain);
 
         await addActivity(tx, {
@@ -1445,20 +1483,20 @@ export async function bulkAddTagAction(
           action: `Bulk tag added: "${trimmed}"`,
           timestamp,
           source: "curator",
-        });
+        }, ctx.workspaceId);
 
         // Automated curation rules gate: a tag change can move an asset into
         // the automatic production-ready set.
         const curation = runCurationRules(domain, loaded.aiSessionState);
         if (curation.promoted) {
-          await persistSnapshot(tx, curation.domain);
+          await persistSnapshot(tx, curation.domain, ctx.workspaceId);
           await addActivity(tx, {
             assetId: id,
             assetName: curation.domain.name,
             action: "Auto-promoted to production ready (curation rules)",
             timestamp,
             source: "curator",
-          });
+          }, ctx.workspaceId);
         }
       }
       return touched;
@@ -1476,13 +1514,13 @@ export async function bulkRemoveTagAction(
   tag: string,
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const timestamp = nowIso();
       const touched: Asset[] = [];
 
       for (const id of assetIds) {
-        const loaded = await loadAsset(tx, id);
+        const loaded = await loadAsset(tx, id, ctx.workspaceId);
         if (!loaded) continue;
         let domain = loaded.domain;
         if (domain.tags.includes(tag)) {
@@ -1492,11 +1530,11 @@ export async function bulkRemoveTagAction(
             updatedAt: timestamp,
           };
           domain = recomputeProduction(domain);
-          await persistSnapshot(tx, domain);
+          await persistSnapshot(tx, domain, ctx.workspaceId);
         }
         // Re-evaluate readiness is above; sync the asset's session state so
         // accepted/dismissed tracking remains intact after the bulk change.
-        await updateSessionState(tx, id, loaded.aiSessionState);
+        await updateSessionState(tx, id, loaded.aiSessionState, ctx.workspaceId);
         touched.push(domain);
 
         await addActivity(tx, {
@@ -1505,19 +1543,19 @@ export async function bulkRemoveTagAction(
           action: `Bulk tag removed: "${tag}"`,
           timestamp,
           source: "curator",
-        });
+        }, ctx.workspaceId);
 
         // Automated curation rules gate is evaluated per asset for uniformity.
         const curation = runCurationRules(domain, loaded.aiSessionState);
         if (curation.promoted) {
-          await persistSnapshot(tx, curation.domain);
+          await persistSnapshot(tx, curation.domain, ctx.workspaceId);
           await addActivity(tx, {
             assetId: id,
             assetName: curation.domain.name,
             action: "Auto-promoted to production ready (curation rules)",
             timestamp,
             source: "curator",
-          });
+          }, ctx.workspaceId);
         }
       }
       return touched;
@@ -1535,22 +1573,22 @@ export async function bulkMoveToCollectionAction(
   collectionId: string,
 ): Promise<{ ok: boolean; error?: string; assets?: Asset[] }> {
   try {
-    await assertServerRole("CURATOR");
+    const ctx = await requireWorkspaceAction("CURATOR");
     const assets = await withTransaction(async (tx) => {
       const collectionRow = await tx.collection.findUnique({ where: { id: collectionId } });
       const timestamp = nowIso();
       const touched: Asset[] = [];
 
       for (const id of assetIds) {
-        const loaded = await loadAsset(tx, id);
+        const loaded = await loadAsset(tx, id, ctx.workspaceId);
         if (!loaded) continue;
         let domain = loaded.domain;
         domain = { ...domain, collectionId, updatedAt: timestamp };
         domain = recomputeProduction(domain);
-        await persistSnapshot(tx, domain);
+        await persistSnapshot(tx, domain, ctx.workspaceId);
         // Re-evaluate readiness is above; sync the asset's session state so
         // collection overrides remain intact after the bulk move.
-        await updateSessionState(tx, id, loaded.aiSessionState);
+        await updateSessionState(tx, id, loaded.aiSessionState, ctx.workspaceId);
         touched.push(domain);
 
         if (collectionRow) {
@@ -1560,20 +1598,20 @@ export async function bulkMoveToCollectionAction(
             action: `Moved to collection: ${collectionRow.name}`,
             timestamp,
             source: "curator",
-          });
+          }, ctx.workspaceId);
         }
 
         // Automated curation rules gate is evaluated per asset after the move.
         const curation = runCurationRules(domain, loaded.aiSessionState);
         if (curation.promoted) {
-          await persistSnapshot(tx, curation.domain);
+          await persistSnapshot(tx, curation.domain, ctx.workspaceId);
           await addActivity(tx, {
             assetId: id,
             assetName: curation.domain.name,
             action: "Auto-promoted to production ready (curation rules)",
             timestamp,
             source: "curator",
-          });
+          }, ctx.workspaceId);
         }
       }
       return touched;
@@ -1599,17 +1637,23 @@ export async function resetDemoAction(): Promise<{
   };
 }> {
   try {
-    await assertServerRole("ADMIN");
-    await resetDemoData();
+    const ctx = await requireWorkspaceAction("ADMIN");
+    if (!isDemoModeEnabled()) {
+      return {
+        ok: false,
+        error: "Demo reset is disabled. Demo mode must be enabled to reset the workspace.",
+      };
+    }
+    await resetDemoData(ctx.workspaceId);
 
     const [assets, cols, activity, comparisons, feedback, ignoredDuplicateIds] =
       await Promise.all([
-        getAssets(),
-        fetchCollections(),
-        getActivity(),
-        getComparisons(),
-        getFeedbackEntries(),
-        getIgnoredDuplicateIds(),
+        getAssets(ctx.workspaceId),
+        fetchCollections(ctx.workspaceId),
+        getActivity(ctx.workspaceId),
+        getComparisons(ctx.workspaceId),
+        getFeedbackEntries(ctx.workspaceId),
+        getIgnoredDuplicateIds(ctx.workspaceId),
       ]);
 
     return {
@@ -1638,11 +1682,11 @@ export async function fetchFeedAction(): Promise<{
   feedback?: CuratorFeedbackEntry[];
 }> {
   try {
-    await assertServerRole("VIEWER");
+    const ctx = await requireWorkspaceAction("VIEWER");
     const [activity, comparisons, feedback] = await Promise.all([
-      getActivity(),
-      getComparisons(),
-      getFeedbackEntries(),
+      getActivity(ctx.workspaceId),
+      getComparisons(ctx.workspaceId),
+      getFeedbackEntries(ctx.workspaceId),
     ]);
     return { ok: true, activity, comparisons, feedback };
   } catch (error) {
@@ -1672,8 +1716,13 @@ export async function searchAssetsAction(
   if (!trimmed) return { ok: true, assets: [], hits: [] };
 
   try {
-    await assertServerRole("VIEWER");
-    const { assets, hits } = await hybridSearchAssets({ query: trimmed, limit, vectorWeight });
+    const ctx = await requireWorkspaceAction("VIEWER");
+    const { assets, hits } = await hybridSearchAssets({
+      workspaceId: ctx.workspaceId,
+      query: trimmed,
+      limit,
+      vectorWeight,
+    });
     return { ok: true, assets, hits };
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: error.message };
@@ -1697,8 +1746,8 @@ export async function reindexAllAssetsAction(): Promise<{
   durationMs?: number;
 }> {
   try {
-    await assertServerRole("CURATOR");
-    const result = await reindexAllAssets();
+    const ctx = await requireWorkspaceAction("CURATOR");
+    const result = await reindexAllAssets(ctx.workspaceId);
     return { ok: true, count: result.count, failed: result.failed, durationMs: result.durationMs };
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: error.message };
@@ -1719,7 +1768,7 @@ export async function exportAssetsAction(
   opts: { assetIds?: string[]; collectionId?: string },
 ): Promise<{ ok: boolean; error?: string; base64?: string; fileName?: string }> {
   try {
-    await assertServerRole("VIEWER");
+    const ctx = await requireWorkspaceAction("VIEWER");
     const collectionId = opts.collectionId?.trim();
     const assetIds = (opts.assetIds ?? []).map((s) => s.trim()).filter(Boolean);
 
@@ -1727,14 +1776,14 @@ export async function exportAssetsAction(
     let label = "assets";
 
     if (collectionId) {
-      const all = await getAssets();
+      const all = await getAssets(ctx.workspaceId);
       assets = all.filter((a) => a.collectionId === collectionId);
-      const collections = await fetchCollections();
+      const collections = await fetchCollections(ctx.workspaceId);
       label = collections.find((c) => c.id === collectionId)?.name ?? "collection";
     } else if (assetIds.length > 0) {
       const loaded: Asset[] = [];
       for (const id of assetIds) {
-        const asset = await getAssetById(id);
+        const asset = await getAssetById(id, ctx.workspaceId);
         if (asset) loaded.push(asset);
       }
       assets = loaded;
@@ -1747,7 +1796,7 @@ export async function exportAssetsAction(
       return { ok: false, error: "No assets matched the export request." };
     }
 
-    const collections = await fetchCollections();
+    const collections = await fetchCollections(ctx.workspaceId);
     const { buffer, fileName } = await buildExportZip(assets, collections, label);
     return { ok: true, base64: buffer.toString("base64"), fileName };
   } catch (error) {
